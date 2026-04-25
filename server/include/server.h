@@ -5,9 +5,11 @@
 #ifndef MINI_DB_SERVER_H
 #define MINI_DB_SERVER_H
 
+#include <nlohmann/json.hpp>
+
 class Server {
 public:
-    void ping();
+    nlohmann::json ping();
 
 private:
 
