@@ -11,8 +11,6 @@
 
 
 class PageHeader {
-    size_t _page_id;
-    size_t _next_page_id;
     size_t _free_size;
 
 public:
@@ -42,7 +40,7 @@ class Page {
     std::vector<char> _data;
 
 public:
-    explicit Page(size_t page_id);
+    explicit Page(const std::vector<char> &data);
 
     PageHeader get_header();
 
@@ -64,7 +62,7 @@ class Column {
     friend class Table;
 
 public:
-    explicit Column(const std::string& name, const DataType type);
+    explicit Column(const std::string &name, const DataType type);
 };
 
 /**
@@ -80,11 +78,14 @@ class Table {
     std::fstream _file;
 
     void move_to_position_columns();
+
 public:
     explicit Table(const std::filesystem::path &path, const std::string &name, const std::vector<Column> &columns);
 
     std::string get_name();
+
     std::vector<Column> get_columns();
+
     std::vector<Page> get_pages();
 };
 
@@ -101,18 +102,19 @@ class Database {
     static std::filesystem::path make_path_to_file(const std::string &name);
 
     void move_to_position_tables_begin();
+
     void move_to_position_tables_end();
 
 public:
     explicit Database(const std::string &name);
 
     std::string get_name();
+
     std::vector<std::string> get_tables();
 
     void insert_table(const std::string &name, const std::vector<Column> &columns);
 
     void drop_table(const std::string &name);
-
 };
 
 

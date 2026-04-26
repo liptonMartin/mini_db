@@ -82,12 +82,12 @@ std::vector<Column> Table::get_columns() {
     DataType column_type;
     std::vector<Column> columns;
 
-    _file.read(reinterpret_cast<char*>(&count_columns), sizeof(count_columns));
+    _file.read(reinterpret_cast<char *>(&count_columns), sizeof(count_columns));
     for (auto i = 0; i < count_columns; ++i) {
-        _file.read(reinterpret_cast<char*>(&len_column_name), sizeof(len_column_name));
+        _file.read(reinterpret_cast<char *>(&len_column_name), sizeof(len_column_name));
         column_name.resize(len_column_name);
         _file.read(&column_name[0], len_column_name);
-        _file.read(reinterpret_cast<char*>(&column_type), sizeof(column_type));
+        _file.read(reinterpret_cast<char *>(&column_type), sizeof(column_type));
         columns.emplace_back(column_name, column_type);
     }
 
@@ -167,7 +167,7 @@ void Database::insert_table(const std::string &name, const std::vector<Column> &
     const auto pos = _file.tellg();
 
     ptrdiff_t count_tables;
-    _file.read(reinterpret_cast<char*>(&count_tables), sizeof(count_tables));
+    _file.read(reinterpret_cast<char *>(&count_tables), sizeof(count_tables));
 
     /* записываем название таблицы */
     move_to_position_tables_end();
@@ -192,7 +192,7 @@ std::vector<std::string> Database::get_tables() {
 
     _file.read(reinterpret_cast<char *>(&count_tables), sizeof(count_tables));
     for (auto i = 0; i < count_tables; ++i) {
-        _file.read(reinterpret_cast<char*>(&len_table_name), sizeof(len_table_name));
+        _file.read(reinterpret_cast<char *>(&len_table_name), sizeof(len_table_name));
         table_name.resize(len_table_name);
         _file.read(&table_name[0], len_table_name);
         tables.push_back(table_name);
