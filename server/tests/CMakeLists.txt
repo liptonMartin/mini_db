@@ -1,0 +1,14 @@
+﻿add_executable(
+        test_main_server
+        test_main_server.cpp
+)
+target_link_libraries(
+        test_main_server
+        PRIVATE
+        main_server
+)
+target_include_directories(
+        test_main_server
+        PRIVATE
+        ../include
+)
