@@ -32,6 +32,7 @@ public:
     }
 };
 
+
 class SlotNotFoundException : public std::exception {
     std::string message;
 
@@ -43,5 +44,19 @@ public:
         return message.c_str();
     }
 };
+
+
+class InvalidSlotEraseException : public std::exception {
+    std::string message;
+
+public:
+    explicit InvalidSlotEraseException(const std::string &msg) : message(msg) {
+    }
+
+    const char *what() const noexcept override {
+        return message.c_str();
+    }
+};
+
 
 #endif //MINIDB_EXCEPTIONS_H

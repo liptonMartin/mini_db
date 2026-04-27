@@ -31,17 +31,17 @@ public:
 
     Slot(ptrdiff_t slot_id, ptrdiff_t offset, ptrdiff_t size);
 
-    ptrdiff_t get_id();
+    ptrdiff_t get_id() const;
 
-    ptrdiff_t get_size();
+    ptrdiff_t get_size() const;
 
-    ptrdiff_t get_offset();
+    ptrdiff_t get_offset() const;
 
-    bool is_occupied();
+    bool is_occupied() const;
 
-    void clear();
+    void release();
 
-    void make_busy(ptrdiff_t slot_id, ptrdiff_t offset, ptrdiff_t size);
+    void make_busy(ptrdiff_t offset, ptrdiff_t size);
 };
 
 
@@ -70,8 +70,13 @@ class Page {
      * @return ID первого свободного блока
      * @exception SlotNotFoundException Свободных блоков нет, нужно создавать новый
      */
-    ptrdiff_t get_id_free_block();
+    ptrdiff_t get_id_first_free_block();
 
+    void make_busy_slot(Slot &slot, ptrdiff_t offset, ptrdiff_t size);
+
+    void release_slot(Slot &slot);
+
+    std::vector<char> get_slot_data(const Slot &slot);
 
 public:
     explicit Page(std::vector<char> &&data);
@@ -86,11 +91,15 @@ public:
 
     std::vector<Slot> get_slots();
 
+    std::vector<Slot> get_occupied_slots();
+
+    std::vector<Slot> get_free_slots();
+
     /**
      * @return Последний слот на странице
      * @exception SlotNotFoundException Если элементов нет
      */
-    Slot get_last_slot();
+    Slot get_last_occupied_slot();
 
     /**
      * @param slot_id Индекс слота
@@ -104,6 +113,11 @@ public:
     void insert_element(const std::vector<char> &data);
 
     void erase_element(ptrdiff_t slot_id);
+
+    /**
+     * @return Вектор из самих данных
+     */
+    std::vector<std::vector<char> > get_slots_data();
 };
 
 enum class DataType { Int, String };

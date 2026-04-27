@@ -16,31 +16,29 @@ Slot::Slot(const ptrdiff_t slot_id, const ptrdiff_t offset, const ptrdiff_t size
     _size(size), _is_occupied(true) {
 }
 
-ptrdiff_t Slot::get_offset() {
+ptrdiff_t Slot::get_offset() const {
     return _offset;
 }
 
-ptrdiff_t Slot::get_size() {
+ptrdiff_t Slot::get_size() const {
     return _size;
 }
 
-ptrdiff_t Slot::get_id() {
+ptrdiff_t Slot::get_id() const {
     return _slot_id;
 }
 
-bool Slot::is_occupied() {
+bool Slot::is_occupied() const {
     return _is_occupied;
 }
 
-void Slot::clear() {
-    _slot_id = -1;
+void Slot::release() {
     _offset = -1;
     _size = -1;
     _is_occupied = false;
 }
 
-void Slot::make_busy(const ptrdiff_t slot_id, const ptrdiff_t offset, const ptrdiff_t size) {
-    _slot_id = slot_id;
+void Slot::make_busy(const ptrdiff_t offset, const ptrdiff_t size) {
     _offset = offset;
     _size = size;
     _is_occupied = true;
@@ -87,14 +85,12 @@ std::vector<char> Page::get_page_data() {
 
 std::vector<Slot> Page::get_slots() {
     std::vector<Slot> slots;
-    ptrdiff_t count_slots;
-
-    std::copy_n(_data.begin() + sizeof(PageHeader), sizeof(count_slots), reinterpret_cast<char *>(&count_slots));
+    const auto count_slots = get_count_slots();
 
     for (auto i = 0; i < count_slots; ++i) {
         Slot slot;
 
-        std::copy_n(_data.begin() + sizeof(PageHeader) + sizeof(count_slots) + i * sizeof(Slot), sizeof(Slot),
+        std::copy_n(_data.begin() + sizeof(PageHeader) + i * sizeof(Slot), sizeof(Slot),
                     reinterpret_cast<char *>(&slot));
 
         slots.push_back(slot);
@@ -103,34 +99,66 @@ std::vector<Slot> Page::get_slots() {
     return slots;
 }
 
-Slot Page::get_last_slot() {
+std::vector<Slot> Page::get_occupied_slots() {
+    std::vector<Slot> slots;
+    const auto count_slots = get_count_slots();
+
+    for (auto i = 0; i < count_slots; ++i) {
+        Slot slot;
+
+        std::copy_n(_data.begin() + sizeof(PageHeader) + i * sizeof(Slot), sizeof(Slot),
+                    reinterpret_cast<char *>(&slot));
+
+        if (slot.is_occupied()) slots.push_back(slot);
+    }
+
+    return slots;
+}
+
+std::vector<Slot> Page::get_free_slots() {
+    std::vector<Slot> slots;
+    const auto count_slots = get_count_slots();
+
+    for (auto i = 0; i < count_slots; ++i) {
+        Slot slot;
+
+        std::copy_n(_data.begin() + sizeof(PageHeader) + i * sizeof(Slot), sizeof(Slot),
+                    reinterpret_cast<char *>(&slot));
+
+        if (!slot.is_occupied()) slots.push_back(slot);
+    }
+
+    return slots;
+}
+
+Slot Page::get_last_occupied_slot() {
     auto count_slots = get_count_slots();
 
     if (count_slots == 0) throw SlotNotFoundException("Page doesn't have any slots");
 
     /* считываем последний слот */
     Slot slot{};
-    std::copy_n(_data.begin() + sizeof(PageHeader) + (count_slots - 1) * sizeof(Slot), sizeof(Slot),
-                reinterpret_cast<char *>(&slot));
-    return slot;
+    /* проходимся по всем slots на странице и ищем slot_id */
+    for (auto i = count_slots - 1; i >= 0; --i) {
+        /* считываем слот */
+        std::copy_n(_data.begin() + sizeof(PageHeader) + i * sizeof(Slot), sizeof(Slot),
+                    reinterpret_cast<char *>(&slot));
+        if (slot.is_occupied()) return slot;
+    }
+
+    throw SlotNotFoundException("Page doesn't have occupied slots!");
 }
 
 Slot Page::get_slot(ptrdiff_t slot_id) {
-    auto count_slots = get_count_slots();
+    const auto count_slots = get_count_slots();
     Slot slot{};
 
     if (slot_id >= count_slots)
         throw SlotNotFoundException(std::format("Page doesn't have slot id {}", slot_id));
 
-    /* проходимся по всем slots на странице и ищем slot_id */
-    for (auto i = 0; i < count_slots; ++i) {
-        /* считываем слот */
-        std::copy_n(_data.begin() + sizeof(PageHeader) + i * sizeof(Slot), sizeof(Slot),
-                    reinterpret_cast<char *>(&slot));
-        if (slot.get_id() == slot_id) return slot;
-    }
-
-    throw SlotNotFoundException(std::format("Page doesn't have slot id {}", slot_id));
+    std::copy_n(_data.begin() + sizeof(PageHeader) + slot_id * sizeof(Slot), sizeof(Slot),
+                reinterpret_cast<char *>(&slot));
+    return slot;
 }
 
 
@@ -139,7 +167,7 @@ void Page::add_new_slot(const Slot &slot) {
 
     /* записываем новый слот */
     std::copy_n(reinterpret_cast<const char *>(&slot), sizeof(Slot),
-                _data.begin() + sizeof(PageHeader) + sizeof(count_slots) + count_slots * sizeof(Slot));
+                _data.begin() + sizeof(PageHeader) + count_slots * sizeof(Slot));
 
     /* увеличиваем количество слотов */
     ++count_slots;
@@ -162,7 +190,7 @@ void Page::update_count_slots(const ptrdiff_t count_slots) {
     std::copy_n(reinterpret_cast<const char *>(&header), sizeof(header), _data.begin());
 }
 
-ptrdiff_t Page::get_id_free_block() {
+ptrdiff_t Page::get_id_first_free_block() {
     const auto count_slots = get_count_slots();
     Slot slot{};
 
@@ -177,6 +205,24 @@ ptrdiff_t Page::get_id_free_block() {
     throw SlotNotFoundException("Page doesn't have holes!");
 }
 
+void Page::make_busy_slot(Slot& slot, const ptrdiff_t offset, const ptrdiff_t size) {
+    slot.make_busy(offset, size);
+
+    /* обновляем слот */
+    std::copy_n(reinterpret_cast<const char *>(&slot), sizeof(Slot),
+            _data.begin() + sizeof(PageHeader) + slot.get_id() * sizeof(Slot));
+}
+
+
+void Page::release_slot(Slot& slot) {
+    slot.release();
+
+    /* обновляем слот */
+    std::copy_n(reinterpret_cast<const char *>(&slot), sizeof(Slot),
+            _data.begin() + sizeof(PageHeader) + slot.get_id() * sizeof(Slot));
+}
+
+
 /**
  * Вставка в страницу данных.
  * Внимание: в странице должно быть место для вставки, иначе выбрасывается исключение
@@ -184,57 +230,59 @@ ptrdiff_t Page::get_id_free_block() {
  * @exception InvalidWriteToPageException Не хватило места для вставки
  */
 void Page::insert_element(const std::vector<char> &data) {
-    auto len_data = std::ssize(data);
-    auto old_free_size = get_free_size();
+    const auto len_data = std::ssize(data);
+    const auto old_free_size = get_free_size();
     auto old_count_slots = get_count_slots();
+
+    if (len_data > old_free_size)
+        throw InvalidWriteToPageException("Page doesn't have space for insert element!");
+
+    Slot last_slot;
+    try {
+        last_slot = get_last_occupied_slot(); /* последний занятый блок */
+    } catch (SlotNotFoundException &e) {
+        last_slot = Slot(-1, db::PAGE_SIZE, 0);
+    }
+
+    const ptrdiff_t new_offset = last_slot.get_offset() - len_data;
+    /* записываем новые данные по новому смещению */
+    std::copy_n(data.begin(), len_data, _data.begin() + new_offset);
 
     ptrdiff_t id_free_block;
     try {
-        id_free_block = get_id_free_block();
-        if (len_data > old_free_size)
-            throw InvalidWriteToPageException("Page doesn't have space for insert element!");
+        id_free_block = get_id_first_free_block(); /* ищет первый свободный блок */
+
         update_free_size(old_free_size - len_data);
 
         auto slot = get_slot(id_free_block);
-        // TODO: slot.make_busy();
 
-    } catch (SlotNotFoundException) {
+        make_busy_slot(slot, new_offset, len_data);
+    } catch (SlotNotFoundException &) {
         id_free_block = old_count_slots; /* индексация с нуля */
         if (len_data + sizeof(Slot) > old_free_size)
             throw InvalidWriteToPageException("Page doesn't have space for insert element!");
 
         /* будем создавать новый слот*/
-        ++old_count_slots;
-        update_count_slots(old_count_slots);
         update_free_size(old_free_size - len_data - sizeof(Slot));
 
-        Slot last_slot;
-        try {
-            last_slot = get_last_slot();
-        } catch (SlotNotFoundException) {
-            last_slot = Slot(-1, db::PAGE_SIZE, 0);
-        }
-
-        const ptrdiff_t new_offset = last_slot.get_offset() - len_data;
-        const Slot slot(last_slot.get_id() + 1, new_offset, len_data);
-        add_new_slot(slot);
-
-        /* записываем новые данные по новому смещению */
-        std::copy_n(data.begin(), len_data, _data.begin() + new_offset);
+        const Slot slot(id_free_block, new_offset, len_data);
+        add_new_slot(slot); /* самостоятельно увеличивает count_slots */
     }
 }
 
 void Page::erase_element(ptrdiff_t slot_id) {
-    auto count_occupied_slots = get_count_occupied_slots();
-    if (slot_id >= count_occupied_slots || slot_id < 0)
+    auto count_slots = get_count_slots();
+    if (slot_id >= count_slots || slot_id < 0)
         throw SlotNotFoundException(std::format("Page doesn't have slot id {}", slot_id));
 
     auto deleted_slot = get_slot(slot_id);
+    if (!deleted_slot.is_occupied())
+        throw InvalidSlotEraseException(std::format("The slot id {} has been already released", slot_id));
     auto offset_deleted_slot = deleted_slot.get_offset();
     auto size_deleted_slot = deleted_slot.get_size();
 
-    auto last_slot = get_last_slot();
-    auto offset_last_slot = last_slot.get_offset();
+    auto last_occupied_slot = get_last_occupied_slot();
+    auto offset_last_slot = last_occupied_slot.get_offset();
 
     /* часть страницы, которую надо перенести */
     std::vector<char> data_to_move(_data.begin() + offset_last_slot, _data.begin() + offset_deleted_slot);
@@ -242,10 +290,43 @@ void Page::erase_element(ptrdiff_t slot_id) {
     /* сдвигаем ровно на size_deleted_slot */
     std::copy_n(data_to_move.begin(), data_to_move.size(), _data.begin() + offset_last_slot + size_deleted_slot);
 
-    /* сдвигаем slots в начале страницы */
+    auto old_free_size = get_free_size();
+    if (slot_id == count_slots - 1) {
+        /* удаляемый элемент был последним, значит можно полностью освободить данные на уровне Slot */
+        --count_slots; /* Удаляем слот, а не освобождаем его! */
+        update_count_slots(count_slots);
+        update_free_size(old_free_size + size_deleted_slot + sizeof(Slot));
+    }
+    else {
+        /* Освобождаем слот, но не удаляем его, поэтому count_slots на странице не меняется! */
+        release_slot(deleted_slot);
+        update_free_size(old_free_size + size_deleted_slot);
+    }
+}
 
+std::vector<char> Page::get_slot_data(const Slot &slot) {
+    const auto size = slot.get_size();
+    const auto offset = slot.get_offset();
 
-    // TODO: update_header () !!! update_size() !!!
+    std::vector<char> slot_data;
+    slot_data.resize(size);
+
+    std::copy_n(_data.begin() + offset, size, slot_data.begin());
+    return slot_data;
+}
+
+std::vector<std::vector<char>> Page::get_slots_data() {
+    std::vector<std::vector<char>> slots_data;
+    const auto count_slots = get_count_slots();
+    for (int i = 0; i < count_slots; ++i) {
+        auto slot = get_slot(i);
+
+        if (!slot.is_occupied()) continue;
+
+        auto slot_data = get_slot_data(slot);
+        slots_data.push_back(slot_data);
+    }
+    return slots_data;
 }
 
 
