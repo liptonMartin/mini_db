@@ -7,16 +7,25 @@
 #include "datatypes.h"
 
 int main() {
-    Database database("vova");
+    // Database database("vova");
+    //
+    // std::vector<Column> columns;
+    // columns.emplace_back("column_1", DataType::Int);
+    // database.insert_table("table_2", columns);
+    //
+    // auto tables = database.get_tables();
+    // for (const auto& item : tables) {
+    //     std::cout << item << ' ';
+    // }
 
-    std::vector<Column> columns;
-    columns.emplace_back("column_1", DataType::Int);
-    database.insert_table("table_2", columns);
+    auto page = Page::create_page();
+    std::vector<char> data;
+    data.push_back('a');
+    page.insert_element(data);
+    page.insert_element(data);
 
-    auto tables = database.get_tables();
-    for (const auto& item : tables) {
-        std::cout << item << ' ';
-    }
+    std::vector<Slot> slots = page.get_slots();
+
 
     return 0;
 }

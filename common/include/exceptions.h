@@ -11,9 +11,35 @@ class InvalidOpenFileException : public std::exception {
     std::string message;
 
 public:
-    explicit InvalidOpenFileException(const std::string& msg) : message(msg) {}
+    explicit InvalidOpenFileException(const std::string &msg) : message(msg) {
+    }
 
-    const char* what() const noexcept override {
+    const char *what() const noexcept override {
+        return message.c_str();
+    }
+};
+
+
+class InvalidWriteToPageException : public std::exception {
+    std::string message;
+
+public:
+    explicit InvalidWriteToPageException(const std::string &msg) : message(msg) {
+    }
+
+    const char *what() const noexcept override {
+        return message.c_str();
+    }
+};
+
+class SlotNotFoundException : public std::exception {
+    std::string message;
+
+public:
+    explicit SlotNotFoundException(const std::string &msg) : message(msg) {
+    }
+
+    const char *what() const noexcept override {
         return message.c_str();
     }
 };
