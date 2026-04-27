@@ -37,6 +37,8 @@ public:
 
     ptrdiff_t get_offset() const;
 
+    void set_offset(ptrdiff_t offset);
+
     bool is_occupied() const;
 
     void release();
@@ -64,6 +66,13 @@ class Page {
     void update_free_size(ptrdiff_t size);
 
     void update_count_slots(ptrdiff_t count_slots);
+
+    /**
+     *
+     * @param slot_id ID слота, начиная с которого, нужно обновить offsets
+     * @param shift_offset На сколько изменились offset (размер удаляемого элемента)
+     */
+    void update_offsets_in_slots(ptrdiff_t slot_id, ptrdiff_t shift_offset);
 
     /**
      *
