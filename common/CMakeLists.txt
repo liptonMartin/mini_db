@@ -9,6 +9,9 @@ add_library(
         include/datatypes.h
         include/constants.h
         include/exceptions.h
+        include/bstarplus_index_tree.h
+        src/datatypes.cpp
+        src/bstarplus_index_tree.cpp
 )
 
 target_include_directories(
@@ -27,4 +30,6 @@ target_link_libraries(
         wsock32
         ws2_32
 )
+add_subdirectory(tests)
+
 add_subdirectory(tests)
