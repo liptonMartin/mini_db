@@ -50,12 +50,18 @@ int main() {
         }
     );
 
+    // test find
     const auto found = index.find(10);
     assert(found.has_value());
     assert(*found == second_record);
 
     const auto missing = index.find(15);
     assert(!missing.has_value());
+
+    // test insert
+    db::RecordId insert_record = {15, 4};
+    index.insert(30, insert_record);
+    assert(index.find(30) == insert_record);
 
     return 0;
 }

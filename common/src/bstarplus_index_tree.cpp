@@ -223,8 +223,48 @@ namespace {
         return _metadata;
     }
 
-    void BStarPlusIndex::insert(IndexKey, RecordId) {
-        not_implemented();
+    void BStarPlusIndex::insert(IndexKey key, RecordId record) {
+        if (_metadata.empty()) {
+            const PageId root_page_id = _page_manager.allocate_page();
+
+            IndexNode root;
+            root.is_leaf = true;
+            root.page_id = root_page_id;
+            root.parent_page_id = INVALID_PAGE_ID;
+            root.next_leaf_page_id = INVALID_PAGE_ID;
+            root.keys.push_back(key);
+            root.records.push_back(record);
+
+            _page_manager.write_page(root_page_id, serialize_node(root));
+
+            _metadata.root_page_id = root_page_id;
+            _metadata.first_leaf_page_id = root_page_id;
+            _metadata.height = 1;
+            _metadata.size = 1;
+
+            return;
+        }
+
+        auto page = _page_manager.read_page(_metadata.root_page_id);
+        auto root = deserialize_node(page);
+
+        if (!root.is_leaf) {
+            throw std::logic_error("Insert into non-leaf root is not implemented yet");
+        }
+
+        auto it = std::lower_bound(root.keys.begin(), root.keys.end(), key);
+        const auto index = static_cast<std::size_t>(it - root.keys.begin());
+
+        if (it != root.keys.end() && *it == key) {
+            throw std::invalid_argument("Duplicate index key");
+        }
+
+        root.keys.insert(root.keys.begin() + index, key);
+        root.records.insert(root.records.begin() + index, record);
+
+        _page_manager.write_page(root.page_id, serialize_node(root));
+
+        ++_metadata.size;
     }
 
     bool BStarPlusIndex::erase(IndexKey) {
