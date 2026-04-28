@@ -9,6 +9,10 @@
 #include "exceptions.h"
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> a381add (drop_database)
 Database::Database(const std::string &name, const bool need_to_create) {
     /* путь до схемы: root/databases/{database_name}/{database_name}.schema */
     auto path_to_file = make_path_to_file(name);

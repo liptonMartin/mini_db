@@ -449,10 +449,12 @@ public:
 
     std::vector<Row> select_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
-    static Database create_database(const std::string &name); // TODO: impl it!
-    static Database load_database(const std::string &name); // TODO: impl it!
-
-    void drop_database(); // TODO: impl it!
+    /**
+     *
+     * @param db_name Имя базы данных
+     * @exception DatabaseDoesNotExistException Попытка удалить несуществующей базы данных
+     */
+    void drop_database(const std::string& db_name);
 
     std::string get_name();
 
