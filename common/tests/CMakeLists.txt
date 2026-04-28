@@ -27,3 +27,20 @@ target_link_libraries(
         common
         gtest
 )
+        ../include
+)
+
+add_executable(
+        test_bstarplus_index_tree
+        test_bstarplus_index_tree.cpp
+)
+target_link_libraries(
+        test_bstarplus_index_tree
+        PRIVATE
+        common
+)
+target_include_directories(
+        test_bstarplus_index_tree
+        PRIVATE
+        ../include
+)
