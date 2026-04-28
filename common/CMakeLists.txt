@@ -1,11 +1,15 @@
 add_library(
         common
-        include/datatypes.h
-        src/datatypes.cpp
-        include/command.h
+        src/database.cpp
+        src/page.cpp
+        src/slot.cpp
+        src/table.cpp
         src/command.cpp
-        include/exceptions.h
         src/page_manager.cpp
+        include/datatypes.h
+        include/constants.h
+        include/exceptions.h
+        include/command.h
 )
 
 target_include_directories(
