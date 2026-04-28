@@ -7,74 +7,45 @@
 #include <exception>
 #include <string>
 
-class InvalidOpenFileException : public std::exception {
-    std::string message;
-
+class InvalidOpenFileException : public std::runtime_error {
 public:
-    explicit InvalidOpenFileException(const std::string &msg) : message(msg) {
-    }
-
-    const char *what() const noexcept override {
-        return message.c_str();
+    explicit InvalidOpenFileException(const std::string &msg) : std::runtime_error(msg) {
     }
 };
 
 
-class InvalidWriteToPageException : public std::exception {
-    std::string message;
-
+class InvalidWriteToPageException : public std::runtime_error {
 public:
-    explicit InvalidWriteToPageException(const std::string &msg) : message(msg) {
-    }
-
-    const char *what() const noexcept override {
-        return message.c_str();
+    explicit InvalidWriteToPageException(const std::string &msg) : std::runtime_error(msg) {
     }
 };
 
 
-class SlotNotFoundException : public std::exception {
-    std::string message;
-
+class SlotNotFoundException : public std::runtime_error {
 public:
-    explicit SlotNotFoundException(const std::string &msg) : message(msg) {
-    }
-
-    const char *what() const noexcept override {
-        return message.c_str();
+    explicit SlotNotFoundException(const std::string &msg) : std::runtime_error(msg) {
     }
 };
 
 
-class InvalidSlotEraseException : public std::exception {
-    std::string message;
-
+class InvalidSlotEraseException : public std::runtime_error {
 public:
-    explicit InvalidSlotEraseException(const std::string &msg) : message(msg) {
-    }
-
-    const char *what() const noexcept override {
-        return message.c_str();
+    explicit InvalidSlotEraseException(const std::string &msg) : std::runtime_error(msg) {
     }
 };
 
 
 class DatabaseIsNotChosenException : public std::exception {
-
 public:
     const char *what() const noexcept override {
         return "Database is not selected, either USE before the query, or add the database name";
     }
 };
 
-class DatabaseHasAlreadyExistsException : public std::exception {
-    std::string name;
-
-    public:
-    explicit DatabaseHasAlreadyExistsException(const std::string &name) : name(name) {}
-
-    const char *what() const noexcept override {
-        return ("The database " + name + " already exists.").c_str();
+class DatabaseHasAlreadyExistsException : public std::runtime_error {
+public:
+    explicit DatabaseHasAlreadyExistsException(const std::string &name) : std::runtime_error(
+        "The database " + name + " already exists.") {
     }
 };
 
