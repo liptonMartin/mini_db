@@ -29,8 +29,18 @@ add_executable(
 add_executable(
         main_storage_node main_storage_node.cpp
 )
+target_include_directories(
+        server
+        PUBLIC
+        ../common/include
+)
 target_link_libraries(
-        main_server
+        server
+        PUBLIC
+        common
+)
+target_link_libraries(
+        server
         PUBLIC
         server
 )

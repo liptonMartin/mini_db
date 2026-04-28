@@ -3,6 +3,7 @@
 
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
+#include <any>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -12,6 +13,7 @@
 #include <variant>
 #include <nlohmann/json.hpp>
 
+using Values = std::variant<int, std::string>;
 
 class Null {
 public:
@@ -296,6 +298,56 @@ public:
     nlohmann::json to_json() const override;
 };
 
+
+enum class ComparisonDataType {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+};
+
+
+class Condition {
+    Column _column{};
+
+public:
+    virtual ~Condition() = default;
+
+    virtual bool evaluate() const = 0;
+};
+
+class ComparisonCondition : public Condition {
+    ComparisonDataType _comparison_type;
+    std::any _value;
+
+public:
+    ComparisonCondition(Column column, ComparisonDataType comparison_type, std::any value);
+
+    bool evaluate() const override;
+};
+
+class BetweenCondition : public Condition {
+    Column _column_start;
+    Column _column_end;
+
+public:
+    BetweenCondition(Column column, Column column_start, Column column_end);
+
+    bool evaluate() const override;
+};
+
+class RegexCondition : public Condition {
+    std::string _regex;
+
+public:
+    RegexCondition(Column column, std::string regex);
+
+    bool evaluate() const override;
+};
+
+
 /**
  * На первой страницы файла {name}.binary хранится :
  * ptrdiff_t size_name
@@ -396,6 +448,11 @@ public:
     void delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
     std::vector<Row> select_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
+
+    static Database create_database(const std::string &name); // TODO: impl it!
+    static Database load_database(const std::string &name); // TODO: impl it!
+
+    void drop_database(); // TODO: impl it!
 
     std::string get_name();
 
