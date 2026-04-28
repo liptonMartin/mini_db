@@ -69,5 +69,51 @@ struct keyword : pegtl::sor<
     kw_value, kw_update, kw_set, kw_delete, kw_from, kw_select,
     kw_where, kw_as, kw_and, kw_like, kw_between
 >{};
+/* Структура  идентификатора (Имя столбца либо название бд либо еще что)
+ *Реализуем, что первый символ не цифра
+ */
+struct identificator : pegtl::seq<
+    pegtl::sor<pegtl::ascii::alpha, pegtl::one<'_'>>,
+    pegtl::star<pegtl::sor<pegtl::ascii::alnum, pegtl::one<'_'>>>
+>{};
+// Cтруктура чисел
+struct number : pegtl::plus<pegtl::ascii::digit> {};
+// строковый литерал заключается в двойные кавычки:
+struct string_literal : pegtl::seq<
+    pegtl::one<'"'>,
+    pegtl::star<pegtl::not_one<'"'>>,
+    pegtl::one<'"'>
+> {};
+// Спецсимволы
+struct star_s: pegtl::one<'*'>{};
+struct comma_s: pegtl::one<','>{};
+struct lbracket_s: pegtl::one<'('>{};
+struct rbracket_s: pegtl::one<')'>{};
+struct dot_s: pegtl::one<'.'>{};
+struct semicolon_s: pegtl::one<';'>{};
+//Сравнение
+struct eq_s: TAO_PEGTL_STRING("=="){};
+struct ne_s: TAO_PEGTL_STRING("!="){};
+struct greater_equal_s: TAO_PEGTL_STRING(">="){};
+struct less_equal_s: TAO_PEGTL_STRING("<="){};
+struct greater_s: pegtl::one<">">{};
+struct less_s: pegtl::one<"<">{};
+// Итоговая структура сравнения
+struct comparison: pegtl::sor<greater_equal_s, less_equal_s, eq_s, ne_s, greater_s, less_s>{};
+
+struct token: pegtl::sor<
+    comparison,
+    string_literal,
+    number,
+    star_s,
+    comma_s,
+    lbracket_s,
+    rbracket_s,
+    dot_s,
+    semicolon_s,
+    keyword,
+    identificator
+>{};
+
 
 #endif //MINI_DB_PARSER_H
