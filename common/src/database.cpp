@@ -10,10 +10,10 @@
 
 
 
-Database::Database(const std::string &name) {
+Database::Database(const std::string &name, const bool need_to_create) {
     /* путь до схемы: root/databases/{database_name}/{database_name}.schema */
     auto path_to_file = make_path_to_file(name);
-    if (!std::filesystem::exists(path_to_file)) {
+    if (!std::filesystem::exists(path_to_file) && need_to_create) {
         std::filesystem::create_directories(path_to_file);
     }
     else {
@@ -46,11 +46,36 @@ Database::Database(const std::string &name) {
     }
 }
 
-std::filesystem::path Database::make_path_to_file(const std::string &name) {
+Database Database::create_database(const std::string &name) {
+    return Database(name, true);
+}
+
+Database Database::load_database(const std::string &name) {
+    return Database(name, false);
+}
+
+void Database::drop_database(const std::string& db_name) {
+    auto tables = get_tables();
+
+    for (auto &table_name: tables) {
+        drop_table(table_name);
+    }
+
+    auto path = make_path_to_file(db_name);
+
+    if (!std::filesystem::exists(path)) {
+        throw DatabaseDoesNotExistException(db_name);
+    }
+
+    const auto schema_path = path / (db_name + ".schema");
+    std::filesystem::remove(schema_path);
+}
+
+std::filesystem::path Database::make_path_to_file(const std::string &db_name) {
     const std::filesystem::path exe_path = std::filesystem::current_path();
     // Поднимаемся на 2 уровня выше: из build/bin/ -> в корень проекта
     const std::filesystem::path project_root = exe_path.parent_path().parent_path().parent_path(); // от build/
-    std::filesystem::path db_dir = project_root / "databases" / name;
+    std::filesystem::path db_dir = project_root / "databases" / db_name;
     return db_dir;
 }
 
@@ -119,3 +144,4 @@ std::vector<std::string> Database::get_tables() {
 
     return tables;
 }
+

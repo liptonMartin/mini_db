@@ -49,16 +49,17 @@ public:
     }
 };
 
-class LexerException : public std::exception {
-    std::string message;
-
+class DatabaseDoesNotExistException : public std::runtime_error {
 public:
-    explicit LexerException(const std::string& msg) : message(msg) {}
-
-    const char* what() const noexcept override {
-        return message.c_str();
+    explicit DatabaseDoesNotExistException(const std::string &name) : std::runtime_error(
+        "The database " + name + " doesn't exist.") {
     }
+};
 
+class LexerException : public std::runtime_error {
+public:
+    explicit LexerException(const std::string &msg) : std::runtime_error(msg) {
+    }
 };
 
 
