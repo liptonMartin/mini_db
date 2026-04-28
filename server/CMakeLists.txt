@@ -2,6 +2,8 @@
         main_server
         include/server.h
         src/server.cpp
+        include/lexer.h
+        src/lexer.cpp
 )
 
 target_include_directories(
@@ -13,6 +15,11 @@ target_link_libraries(
         main_server
         PUBLIC
         nlohmann_json::nlohmann_json
+        taocpp::pegtl
 )
 
 add_subdirectory(tests)
+
+find_package(pegtl CONFIG REQUIRED)
+
+
