@@ -453,7 +453,11 @@ Database::Database(const std::string &name) {
     if (!std::filesystem::exists(path_to_file)) {
         std::filesystem::create_directories(path_to_file);
     }
-    auto schema_path = path_to_file / (name + ".schema");
+    else {
+        throw DatabaseHasAlreadyExistsException(name);
+    }
+
+    const auto schema_path = path_to_file / (name + ".schema");
 
     const auto file_exist = std::filesystem::exists(schema_path);
     if (file_exist) {

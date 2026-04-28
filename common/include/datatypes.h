@@ -124,7 +124,7 @@ public:
 
     std::vector<char> get_page_data();
 
-    ptrdiff_t insert_element(const std::vector<char> &data);
+    void insert_element(const std::vector<char> &data);
 
     void erase_element(ptrdiff_t slot_id);
 

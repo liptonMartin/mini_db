@@ -1,18 +1,28 @@
 ﻿add_library(
-        main_server
-        include/server.h
-        src/server.cpp
+        server
+        include/storage_engine.h
         include/lexer.h
+        src/storage_engine.cpp
         src/lexer.cpp
 )
 
 target_include_directories(
-        main_server
+        server
         PUBLIC
         ./include
 )
+target_include_directories(
+        server
+        PUBLIC
+        ../common/include
+)
 target_link_libraries(
-        main_server
+        server
+        PUBLIC
+        common
+)
+target_link_libraries(
+        server
         PUBLIC
         common
         nlohmann_json::nlohmann_json

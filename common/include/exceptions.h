@@ -59,10 +59,29 @@ public:
 };
 
 
+class DatabaseIsNotChosenException : public std::exception {
+
+public:
+    const char *what() const noexcept override {
+        return "Database is not selected, either USE before the query, or add the database name";
+    }
+};
+
+class DatabaseHasAlreadyExistsException : public std::exception {
+    std::string name;
+
+    public:
+    explicit DatabaseHasAlreadyExistsException(const std::string &name) : name(name) {}
+
+    const char *what() const noexcept override {
+        return ("The database " + name + " already exists.").c_str();
+    }
+};
+
 class LexerException : public std::exception {
     std::string message;
 
-    public:
+public:
     explicit LexerException(const std::string& msg) : message(msg) {}
 
     const char* what() const noexcept override {
@@ -70,4 +89,6 @@ class LexerException : public std::exception {
     }
 
 };
+
+
 #endif //MINIDB_EXCEPTIONS_H
