@@ -242,8 +242,12 @@ class Table {
 
     void move_to_position_columns();
 
-public:
     explicit Table(const std::filesystem::path &path, const std::string &name, const std::vector<Column> &columns);
+
+public:
+    static Table create_table(const std::filesystem::path &path, const std::string &name,
+                              const std::vector<Column> &columns); // TODO: impl
+    static Table load_table(const std::filesystem::path &path, const std::string &name); // TODO: impl it!
 
     std::string get_name();
 
@@ -251,13 +255,14 @@ public:
 
     std::vector<Page> get_pages();
 
-    void insert_elements(); // TODO: edit declaration
+    void insert_elements(const std::vector<Column> &columns, const std::vector<Values> &values); // TODO: impl it!
 
-    void update_elements(); // TODO: edit declaration
+    void update_elements(const Condition &condition, const std::vector<Column> &columns,
+                         const std::vector<Values> &values); // TODO: impl it!
 
-    void delete_elements(); // TODO: edit declaration
+    void delete_elements(const Condition &condition); // TODO: impl it!
 
-    std::vector<Values> select_elements(); // TODO: edit declaration
+    std::vector<Values> select_elements(const std::optional<Condition> &condition); // TODO: impl it!
 };
 
 /**
@@ -280,6 +285,7 @@ class Database {
 
 public:
     static Database create_database(const std::string &name);
+
     static Database load_database(const std::string &name);
 
     /**
@@ -288,16 +294,12 @@ public:
      */
     void drop_database();
 
-    std::string get_name();
-
-    std::vector<std::string> get_tables();
-
     void create_table(const std::string &name, const std::vector<Column> &columns);
 
-    void drop_table(const std::string &name); // TODO: impl it!
+    void drop_table(const std::string &name);
 
     void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
-                         const std::vector<std::variant<int, std::string> > &values); // TODO: impl it!
+                         const std::vector<Values> &values);
 
     void update_elements(const std::string &table_name, const Condition &condition, const std::vector<Column> &columns,
                          const std::vector<Values> &values); // TODO: impl it!
@@ -305,6 +307,10 @@ public:
     void delete_elements(const std::string &table_name, const Condition &condition); // TODO: impl it!
 
     std::vector<Values> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
+
+    std::string get_name();
+
+    std::vector<std::string> get_tables();
 };
 
 

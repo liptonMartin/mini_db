@@ -9,14 +9,12 @@
 #include "exceptions.h"
 
 
-
 Database::Database(const std::string &name, const bool need_to_create) {
     /* путь до схемы: root/databases/{database_name}/{database_name}.schema */
     auto path_to_file = make_path_to_file(name);
     if (!std::filesystem::exists(path_to_file) && need_to_create) {
         std::filesystem::create_directories(path_to_file);
-    }
-    else {
+    } else {
         throw DatabaseHasAlreadyExistsException(name);
     }
 
@@ -72,41 +70,9 @@ void Database::drop_database() {
     std::filesystem::remove(schema_path);
 }
 
-std::filesystem::path Database::make_path_to_file(const std::string &db_name) {
-    const std::filesystem::path exe_path = std::filesystem::current_path();
-    // Поднимаемся на 2 уровня выше: из build/bin/ -> в корень проекта
-    const std::filesystem::path project_root = exe_path.parent_path().parent_path().parent_path(); // от build/
-    std::filesystem::path db_dir = project_root / "databases" / db_name;
-    return db_dir;
-}
-
-/**
- * Переносит указатель на начало памяти, где начинаются tables
- */
-void Database::move_to_position_tables_begin() {
-    get_name(); /* сдвинет указатель как раз куда надо */
-}
-
-/**
- * Переносит указатель на начало памяти, где заканчиваются tables
- */
-void Database::move_to_position_tables_end() {
-    get_tables(); /* сдвинет указатель как раз куда надо */
-}
-
-std::string Database::get_name() {
-    _file.seekg(0, std::ios::beg); /* переместить в начало */
-    ptrdiff_t len_name;
-    std::string name;
-    _file.read(reinterpret_cast<char *>(&len_name), sizeof(len_name));
-    name.resize(len_name);
-    _file.read(&name[0], len_name);
-    return name;
-}
-
 void Database::create_table(const std::string &name, const std::vector<Column> &columns) {
-    auto path = make_path_to_file(get_name());
-    Table(path, name, columns);
+    const auto path = make_path_to_file(get_name());
+    Table::create_table(path, name, columns);
 
     move_to_position_tables_begin();
     const auto pos = _file.tellg();
@@ -125,6 +91,63 @@ void Database::create_table(const std::string &name, const std::vector<Column> &
     ++count_tables; /* добавили одну таблицу */
     _file.seekp(pos); /* передвинули указатель на чтение, в место, где хранится количество таблиц */
     _file.write(reinterpret_cast<const char *>(&count_tables), sizeof(count_tables));
+}
+
+void Database::drop_table(const std::string &name) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+
+    if (!std::filesystem::exists(path)) {
+        throw DatabaseDoesNotExistException(db_name);
+    }
+
+    const auto table_path = path / (db_name + ".binary");
+    std::filesystem::remove(table_path);
+}
+
+void Database::insert_elements(const std::string &table_name, const std::vector<Column> &columns,
+                               const std::vector<Values> &values) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+    auto table = Table::load_table(path, table_name);
+
+    table.insert_elements(columns, values);
+}
+
+void Database::update_elements(const std::string &table_name, const Condition &condition,
+                               const std::vector<Column> &columns, const std::vector<Values> &values) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+    auto table = Table::load_table(path, table_name);
+
+    table.update_elements(condition, columns, values);
+}
+
+void Database::delete_elements(const std::string &table_name, const Condition &condition) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+    auto table = Table::load_table(path, table_name);
+
+    table.delete_elements(condition);
+}
+
+std::vector<Values>
+Database::select_elements(const std::string &table_name, const std::optional<Condition> &condition) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+    auto table = Table::load_table(path, table_name);
+
+    return table.select_elements(condition);
+}
+
+std::string Database::get_name() {
+    _file.seekg(0, std::ios::beg); /* переместить в начало */
+    ptrdiff_t len_name;
+    std::string name;
+    _file.read(reinterpret_cast<char *>(&len_name), sizeof(len_name));
+    name.resize(len_name);
+    _file.read(&name[0], len_name);
+    return name;
 }
 
 std::vector<std::string> Database::get_tables() {
@@ -146,3 +169,24 @@ std::vector<std::string> Database::get_tables() {
     return tables;
 }
 
+std::filesystem::path Database::make_path_to_file(const std::string &db_name) {
+    const std::filesystem::path exe_path = std::filesystem::current_path();
+    // Поднимаемся на 2 уровня выше: из build/bin/ -> в корень проекта
+    const std::filesystem::path project_root = exe_path.parent_path().parent_path().parent_path(); // от build/
+    std::filesystem::path db_dir = project_root / "databases" / db_name;
+    return db_dir;
+}
+
+/**
+ * Переносит указатель на начало памяти, где начинаются tables
+ */
+void Database::move_to_position_tables_begin() {
+    get_name(); /* сдвинет указатель как раз куда надо */
+}
+
+/**
+ * Переносит указатель на начало памяти, где заканчиваются tables
+ */
+void Database::move_to_position_tables_end() {
+    get_tables(); /* сдвинет указатель как раз куда надо */
+}
