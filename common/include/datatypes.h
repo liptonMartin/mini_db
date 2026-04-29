@@ -284,10 +284,9 @@ public:
 
     /**
      *
-     * @param db_name Имя базы данных
-     * @exception DatabaseDoesNotExistException Попытка удалить несуществующей базы данных
+     * @exception DatabaseDoesNotExistException Попытка удалить несуществующую базу данных
      */
-    void drop_database(const std::string& db_name);
+    void drop_database();
 
     std::string get_name();
 

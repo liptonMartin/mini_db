@@ -54,7 +54,8 @@ Database Database::load_database(const std::string &name) {
     return Database(name, false);
 }
 
-void Database::drop_database(const std::string& db_name) {
+void Database::drop_database() {
+    auto db_name = get_name();
     auto tables = get_tables();
 
     for (auto &table_name: tables) {
