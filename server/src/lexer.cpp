@@ -1,6 +1,6 @@
 #include "lexer.h"
 #include <tao/pegtl.hpp>
-
+#include "exceptions.h"
 namespace pegtl = tao::pegtl;
 
 
@@ -14,20 +14,137 @@ template<> struct action<keyword> { // ACTION для KEYWORD, видим KEYWORD
     }
 };
 
-// TODO: НАКЛЕПАТЬ ТАКИХ ЖЕ ЭКШНОВ ДЛЯ КАЖДОГО ТОКЕНТАЙПА - обработать их ошибки, В ТОКЕНАЙЗ И ПРИДУМАТЬ ЧТО ДЕЛАТЬ ДАЛЬШЕ
-struct spaces : pegtl::star<pegtl::space> {};
-struct grammar : pegtl::list<token, spaces> {};
+template<> struct action<identificator> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::IDENTIFIER, in.string()});
+    }
+};
+
+template<> struct action<string_literal> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        std::string s = in.string();
+        v.push_back({TypeToken::STRING, s.substr(1, s.size() - 2)});
+    }
+};
+
+template<> struct action<number> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::NUMBER, in.string()});
+    }
+};
+
+template<> struct action<star_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::STAR, "*"});
+    }
+};
+
+template<> struct action<comma_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::COMMA, ","});
+    }
+};
+
+template<> struct action<lbracket_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::LBRACKET, "("});
+    }
+};
+
+template<> struct action<rbracket_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::RBRACKET, ")"});
+    }
+};
+
+template<> struct action<dot_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::DOT, "."});
+    }
+};
+
+template<> struct action<semicolon_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::SEMICOLON, ";"});
+    }
+};
+
+template<> struct action<eq_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::EQ, "=="});
+    }
+};
+
+template<> struct action<ne_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::NE, "!="});
+    }
+};
+
+template<> struct action<less_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::LESSTHAN, "<"});
+    }
+};
+
+template<> struct action<greater_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::GREATERTHAN, ">"});
+    }
+};
+
+template<> struct action<less_equal_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::LESSEQUAL, "<="});
+    }
+};
+
+template<> struct action<greater_equal_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::GREATEREQUAL, ">="});
+    }
+};
+
+template<> struct action<assign_s> {
+    template<typename Input>
+    static void apply(const Input& in, std::vector<Token>& v) {
+        v.push_back({TypeToken::ASSIGN, "="});
+    }
+};
+
+
+struct spaces : pegtl::one<' '> {};
+struct grammar : pegtl::seq<
+    pegtl::list<pegtl::must<token>, spaces>,
+    pegtl::star<pegtl::space>,
+    pegtl::opt<semicolon_s>,
+    pegtl::eof    // всегда доходим до конца для ошибок
+> {};
 
 std::vector<Token> Lexer::tokenize(const std::string& input) {
     std::vector<Token> tokens;
+    if (input.empty()) return tokens;
     try {
         pegtl::memory_input<> in(input, "lexer_sql");
         pegtl::parse<grammar, action>(in, tokens);
     } catch (const pegtl::parse_error& e) {
-        throw LexerException(
-            "Unexpected character at position " +
-            std::to_string(e.positions.front().byte)
-        );
+
+        throw LexerException(e.what());
     }
     return tokens;
 }

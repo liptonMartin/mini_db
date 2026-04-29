@@ -31,7 +31,8 @@ enum class TypeToken {
     GREATERTHAN,
     LESSEQUAL,
     GREATEREQUAL,
-    BETWEEN
+    BETWEEN,
+    ASSIGN
 };
 
 struct Token {
@@ -114,6 +115,7 @@ struct keyword : pegtl::sor<
 
 /* Структура  идентификатора (Имя столбца либо название бд либо еще что)
  *Реализуем, что первый символ не цифра
+ * ВАЖНО РЕАЛИЗОВАТЬ РАЗДЕЛЕНИЕ ПО ;
  */
 struct identificator : pegtl::seq<
             pegtl::sor<pegtl::ascii::alpha, pegtl::one<'_'> >,
@@ -152,6 +154,10 @@ struct dot_s : pegtl::one<'.'> {
 struct semicolon_s : pegtl::one<';'> {
 };
 
+struct assign_s : pegtl::one<'='> {
+
+};
+
 //Сравнение
 struct eq_s : TAO_PEGTL_STRING("==") {
 };
@@ -177,6 +183,7 @@ struct comparison : pegtl::sor<greater_equal_s, less_equal_s, eq_s, ne_s, greate
 
 struct token : pegtl::sor<
             comparison,
+            assign_s,
             string_literal,
             number,
             star_s,

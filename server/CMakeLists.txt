@@ -14,12 +14,13 @@ target_include_directories(
 target_link_libraries(
         main_server
         PUBLIC
+        common
         nlohmann_json::nlohmann_json
         taocpp::pegtl
+        gtest
 )
 
 add_subdirectory(tests)
 
 find_package(pegtl CONFIG REQUIRED)
-
 
