@@ -9,9 +9,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(nlohmann_json REQUIRED)
 
-add_subdirectory(common)
-add_subdirectory(server)
-
 enable_testing()
 
 include(FetchContent)
@@ -22,3 +19,6 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(googletest)
+
+add_subdirectory(common)
+add_subdirectory(server)
