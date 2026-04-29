@@ -33,12 +33,12 @@ public:
 
     void update_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                          const Condition &condition, const std::vector<Column> &columns,
-                         const std::vector<Values> &values);
+                         const std::vector<Value> &values);
 
     void delete_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                          const Condition &condition);
 
-    std::vector<Values> select_elements(const std::optional<std::string> &db_name, const std::string &table_name,
+    std::vector<Value> select_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                                         const std::optional<Condition> &condition);
 };
 

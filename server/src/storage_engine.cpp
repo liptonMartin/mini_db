@@ -53,7 +53,7 @@ void StorageEngine::insert_elements(const std::optional<std::string> &db_name, c
 
 void StorageEngine::update_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                                     const Condition &condition, const std::vector<Column> &columns,
-                                    const std::vector<Values> &values) {
+                                    const std::vector<Value> &values) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
         db.update_elements(table_name, condition, columns, values);
@@ -72,7 +72,7 @@ void StorageEngine::delete_elements(const std::optional<std::string> &db_name, c
     } else throw DatabaseIsNotChosenException();
 }
 
-std::vector<Values> StorageEngine::select_elements(const std::optional<std::string> &db_name,
+std::vector<Value> StorageEngine::select_elements(const std::optional<std::string> &db_name,
                                                    const std::string &table_name,
                                                    const std::optional<Condition> &condition) {
     if (db_name) {

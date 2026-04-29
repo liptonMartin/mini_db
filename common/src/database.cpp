@@ -106,7 +106,7 @@ void Database::drop_table(const std::string &name) {
 }
 
 void Database::insert_elements(const std::string &table_name, const std::vector<Column> &columns,
-                               const std::vector<Values> &values) {
+                               const std::vector<Value> &values) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
@@ -115,7 +115,7 @@ void Database::insert_elements(const std::string &table_name, const std::vector<
 }
 
 void Database::update_elements(const std::string &table_name, const Condition &condition,
-                               const std::vector<Column> &columns, const std::vector<Values> &values) {
+                               const std::vector<Column> &columns, const std::vector<Value> &values) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
@@ -131,7 +131,7 @@ void Database::delete_elements(const std::string &table_name, const Condition &c
     table.delete_elements(condition);
 }
 
-std::vector<Values>
+std::vector<Value>
 Database::select_elements(const std::string &table_name, const std::optional<Condition> &condition) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);

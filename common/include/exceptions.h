@@ -62,5 +62,30 @@ public:
     }
 };
 
+class TableHasAlreadyExistsException : public std::runtime_error {
+public:
+    explicit TableHasAlreadyExistsException(const std::string &name) : std::runtime_error(
+        "The table " + name + " already exists.") {
+    }
+};
+
+class TableDoesNotExistException : public std::runtime_error {
+public:
+    explicit TableDoesNotExistException(const std::string &name) : std::runtime_error(
+        "The table " + name + " does not exist.") {
+    }
+};
+
+class FailedCreateTableException : public std::runtime_error {
+public:
+    explicit FailedCreateTableException(const std::string &msg) : std::runtime_error(msg) {
+    }
+};
+
+class FailedInsertElementsToTableException : public std::runtime_error {
+public:
+    explicit FailedInsertElementsToTableException(const std::string &msg) : std::runtime_error(msg) {
+    }
+};
 
 #endif //MINIDB_EXCEPTIONS_H

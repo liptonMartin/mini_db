@@ -4,15 +4,17 @@
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
 #include <any>
-#include <cstddef>
 #include <filesystem>
 #include <vector>
 #include <string>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <variant>
 
-using Values = std::variant<int, std::string>;
+class Null {};
+
+using Value = std::variant<int, std::string, Null>;
 
 /**
  * _free_size - количество в байтах свободного места на странице
@@ -164,18 +166,23 @@ public:
     void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id);
 };
 
-enum class DataType { Int, String };
+enum class DataType { Int, String, Null };
 
 class Column {
+    ptrdiff_t _column_id = -1;
     std::string _name = "";
     DataType _type;
+    bool _is_nullable = false;
+    bool _is_indexed = false;
 
     friend class Table;
 
 public:
     Column() = default;
 
-    explicit Column(const std::string &name, const DataType type);
+    bool operator<(const Column &column) const;
+
+    explicit Column(const std::string &name, DataType type, bool is_nullable = false, bool is_indexed = false);
 };
 
 
@@ -235,34 +242,42 @@ public:
  * ptrdiff_t size_columns
  * std::vector<Column> columns
  * ptrdiff_t size_pages
- * std::vector<Page> pages
  */
 class Table {
     std::fstream _file;
 
     void move_to_position_columns();
 
-    explicit Table(const std::filesystem::path &path, const std::string &name, const std::vector<Column> &columns);
+    void move_to_position_count_page();
+
+    void move_to_position_pages();
+
+    ptrdiff_t get_pages_begin_offset();
+
+    std::map<Column, Value> get_empty_values();
+
+    explicit Table(const std::filesystem::path &path, const std::string &name,
+                   const std::optional<std::vector<Column> > &columns, bool need_create);
 
 public:
     static Table create_table(const std::filesystem::path &path, const std::string &name,
-                              const std::vector<Column> &columns); // TODO: impl
-    static Table load_table(const std::filesystem::path &path, const std::string &name); // TODO: impl it!
+                              const std::vector<Column> &columns);
+    static Table load_table(const std::filesystem::path &path, const std::string &name);
+
+    void insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values); // TODO: impl it!
+
+    void update_elements(const Condition &condition, const std::vector<Column> &columns,
+                         const std::vector<Value> &values); // TODO: impl it!
+
+    void delete_elements(const Condition &condition); // TODO: impl it!
+
+    std::vector<Value> select_elements(const std::optional<Condition> &condition); // TODO: impl it!
 
     std::string get_name();
 
     std::vector<Column> get_columns();
 
-    std::vector<Page> get_pages();
-
-    void insert_elements(const std::vector<Column> &columns, const std::vector<Values> &values); // TODO: impl it!
-
-    void update_elements(const Condition &condition, const std::vector<Column> &columns,
-                         const std::vector<Values> &values); // TODO: impl it!
-
-    void delete_elements(const Condition &condition); // TODO: impl it!
-
-    std::vector<Values> select_elements(const std::optional<Condition> &condition); // TODO: impl it!
+    ptrdiff_t get_count_pages();
 };
 
 /**
@@ -299,14 +314,14 @@ public:
     void drop_table(const std::string &name);
 
     void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
-                         const std::vector<Values> &values);
+                         const std::vector<Value> &values);
 
     void update_elements(const std::string &table_name, const Condition &condition, const std::vector<Column> &columns,
-                         const std::vector<Values> &values);
+                         const std::vector<Value> &values);
 
     void delete_elements(const std::string &table_name, const Condition &condition);
 
-    std::vector<Values> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
+    std::vector<Value> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
 
     std::string get_name();
 
