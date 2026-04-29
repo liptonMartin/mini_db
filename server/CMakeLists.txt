@@ -10,10 +10,6 @@ target_include_directories(
         server
         PUBLIC
         ./include
-)
-target_include_directories(
-        server
-        PUBLIC
         ../common/include
 )
 target_link_libraries(
@@ -28,7 +24,6 @@ target_link_libraries(
         nlohmann_json::nlohmann_json
         taocpp::pegtl
 )
-
 add_subdirectory(tests)
 
 find_package(pegtl CONFIG REQUIRED)
