@@ -1,6 +1,5 @@
 ﻿//
 // Created by rvova on 25.04.2026.
-//
 
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
@@ -10,47 +9,124 @@
 #include <fstream>
 
 
+/**
+ * _free_size - количество в байтах свободного места на странице
+ * _count_slots - количество всех слотов (и свободных, и занятых)
+ */
 class PageHeader {
-    size_t _free_size;
+    ptrdiff_t _free_size;
+    ptrdiff_t _count_slots;
 
-public:
-    explicit PageHeader(size_t page_id);
-
-    size_t get_page_id();
-
-    size_t get_free_size();
-
-    void set_free_size(size_t free_size);
+    friend class Page;
 };
 
 class Slot {
-    size_t _offset;
-    size_t _size;
+    ptrdiff_t _slot_id;
+    ptrdiff_t _offset;
+    ptrdiff_t _size;
+    bool _is_occupied;
 
 public:
-    Slot(size_t offset, size_t size);
+    Slot() = default;
 
-    size_t get_size();
+    Slot(ptrdiff_t slot_id, ptrdiff_t offset, ptrdiff_t size);
 
-    size_t get_offset();
+    ptrdiff_t get_id() const;
+
+    ptrdiff_t get_size() const;
+
+    ptrdiff_t get_offset() const;
+
+    void set_offset(ptrdiff_t offset);
+
+    bool is_occupied() const;
+
+    void release();
+
+    void make_busy(ptrdiff_t offset, ptrdiff_t size);
 };
 
 
+/**
+ * Страница содержит:
+ * PageHeader(свободный размер этой страницы)
+ * ptrdiff_t count slots
+ * std::vector<Slot> slots (слоты) (растет вниз)
+ * ... (свободное место)
+ * slots (растут вверх)
+ *
+ * Это сделано для того, чтобы можно было быстро обращаться к slot_id,
+ * быстро добавлять и удалять новые элементы
+ */
 class Page {
     std::vector<char> _data;
 
+    void add_new_slot(const Slot &slot);
+
+    void update_free_size(ptrdiff_t size);
+
+    void update_count_slots(ptrdiff_t count_slots);
+
+    /**
+     *
+     * @param slot_id ID слота, начиная с которого, нужно обновить offsets
+     * @param shift_offset На сколько изменились offset (размер удаляемого элемента)
+     */
+    void update_offsets_in_slots(ptrdiff_t slot_id, ptrdiff_t shift_offset);
+
+    /**
+     *
+     * @return ID первого свободного блока
+     * @exception SlotNotFoundException Свободных блоков нет, нужно создавать новый
+     */
+    ptrdiff_t get_id_first_free_block();
+
+    void make_busy_slot(Slot &slot, ptrdiff_t offset, ptrdiff_t size);
+
+    void release_slot(Slot &slot);
+
+    std::vector<char> get_slot_data(const Slot &slot);
+
 public:
-    explicit Page(const std::vector<char> &data);
+    explicit Page(std::vector<char> &&data);
+
+    static Page create_page();
 
     PageHeader get_header();
 
+    ptrdiff_t get_free_size();
+
+    ptrdiff_t get_count_slots();
+
     std::vector<Slot> get_slots();
 
-    std::vector<char> get_data();
+    std::vector<Slot> get_occupied_slots();
 
-    void insert_element(std::vector<char> &data);
+    std::vector<Slot> get_free_slots();
 
-    void erase_element(size_t slot_id);
+    /**
+     * @return Последний слот на странице
+     * @exception SlotNotFoundException Если элементов нет
+     */
+    Slot get_last_occupied_slot();
+
+    /**
+     * @param slot_id Индекс слота
+     * @return Возвращает слот по индексу slot_id
+     * @exception SlotNotFoundException Если такого индекса не существует
+     */
+    Slot get_slot(ptrdiff_t slot_id);
+
+    std::vector<char> get_page_data();
+
+    void insert_element(const std::vector<char> &data);
+
+    void erase_element(ptrdiff_t slot_id);
+
+    /**
+     * @return Вектор из самих данных
+     */
+    std::vector<std::vector<char> > get_slots_data();
 };
 
 enum class DataType { Int, String };
