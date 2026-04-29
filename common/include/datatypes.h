@@ -4,6 +4,7 @@
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
 #include <any>
+#include <cstddef>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -207,6 +208,24 @@ public:
     void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const;
 
     void update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const;
+};
+
+class PageManager {
+    std::fstream &_file;
+    ptrdiff_t _pages_begin_offset;
+
+    ptrdiff_t page_offset(ptrdiff_t page_id) const;
+
+public:
+    PageManager(std::fstream &file, ptrdiff_t pages_begin_offset);
+
+    ptrdiff_t allocate_page();
+
+    ptrdiff_t search_free_page(ptrdiff_t need_size);
+
+    std::vector<char> read_page(ptrdiff_t page_id);
+
+    void write_page(ptrdiff_t page_id, const std::vector<char> &data);
 };
 
 enum class DataType { Int, String };
