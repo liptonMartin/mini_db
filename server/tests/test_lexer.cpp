@@ -279,7 +279,4 @@ TEST(LexerTest, IdentifierWithUnderscore) {
 TEST(LexerTest, IdentifierCannotStartWithDigit) {
     auto tokens = lex("123abc");
     ASSERT_EQ(tokens.size(), 1);
-    // Должен быть number + identifier? Или только number?
-    // С текущей грамматикой number съест "123", потом "abc" отдельно
-    // Проверим "123abc" как единую строку — должно быть number(123) + identifier(abc)
 }
