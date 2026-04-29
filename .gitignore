@@ -6,6 +6,7 @@
 *.lo
 *.o
 *.obj
+*.idea
 
 # Precompiled Headers
 *.gch
@@ -70,3 +71,4 @@ Testing/
 
 # database
 databases
+.idea

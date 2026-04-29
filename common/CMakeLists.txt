@@ -4,6 +4,7 @@ add_library(
         src/datatypes.cpp
         include/command.h
         src/command.cpp
+        include/exceptions.h
 )
 
 target_include_directories(

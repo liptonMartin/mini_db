@@ -59,4 +59,15 @@ public:
 };
 
 
+class LexerException : public std::exception {
+    std::string message;
+
+    public:
+    explicit LexerException(const std::string& msg) : message(msg) {}
+
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+
+};
 #endif //MINIDB_EXCEPTIONS_H
