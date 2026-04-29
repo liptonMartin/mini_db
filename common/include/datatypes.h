@@ -302,9 +302,9 @@ public:
                          const std::vector<Values> &values);
 
     void update_elements(const std::string &table_name, const Condition &condition, const std::vector<Column> &columns,
-                         const std::vector<Values> &values); // TODO: impl it!
+                         const std::vector<Values> &values);
 
-    void delete_elements(const std::string &table_name, const Condition &condition); // TODO: impl it!
+    void delete_elements(const std::string &table_name, const Condition &condition);
 
     std::vector<Values> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
 
