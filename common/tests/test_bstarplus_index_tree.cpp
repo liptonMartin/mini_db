@@ -64,6 +64,25 @@ int main() {
     index.insert(30, insert_record);
     assert(index.find(30) == insert_record);
 
+    // test erase
+    assert(index.erase(10));
+    assert(!index.find(10).has_value());
+    assert(index.find(5) == first_record);
+    assert(index.find(20) == third_record);
+    assert(index.find(30) == insert_record);
+    assert(index.metadata().size == 3);
+
+    assert(!index.erase(15));
+    assert(index.metadata().size == 3);
+
+    assert(index.erase(5));
+    assert(index.erase(20));
+    assert(index.erase(30));
+    assert(index.metadata().empty());
+    assert(index.metadata().size == 0);
+    assert(!index.find(5).has_value());
+    assert(!index.erase(30));
+
     const db::PageId internal_root_page_id = page_manager.allocate_page();
     const db::PageId left_leaf_page_id = page_manager.allocate_page();
     const db::PageId right_leaf_page_id = page_manager.allocate_page();
@@ -118,6 +137,13 @@ int main() {
     assert(unchanged_left_leaf.keys.size() == 2);
     assert(unchanged_left_leaf.keys[0] == 10);
     assert(unchanged_left_leaf.keys[1] == 20);
+
+    assert(height_two_index.erase(70));
+    assert(!height_two_index.find(70).has_value());
+    assert((height_two_index.find(60) == db::RecordId{200, 1}));
+    assert((height_two_index.find(80) == db::RecordId{200, 2}));
+    assert((height_two_index.find(10) == db::RecordId{100, 1}));
+    assert(!height_two_index.erase(70));
 
     // test split
     InMemoryIndexPageManager split_page_manager;

@@ -624,12 +624,57 @@ namespace db {
         ++_metadata.size;
     }
 
-    bool BStarPlusIndex::erase(IndexKey) {
+    bool BStarPlusIndex::erase(IndexKey key) {
         if (_metadata.empty()) {
             return false;
         }
 
-        not_implemented();
+        auto leaf_search = find_leaf(key);
+        auto& leaf = leaf_search.leaf;
+
+        auto it = std::lower_bound(leaf.keys.begin(), leaf.keys.end(), key);
+        if (it == leaf.keys.end() || *it != key) {
+            return false;
+        }
+
+        const auto erased_index = static_cast<std::size_t>(it - leaf.keys.begin());
+        leaf.keys.erase(it);
+        leaf.records.erase(leaf.records.begin() + static_cast<std::ptrdiff_t>(erased_index));
+
+        if (_metadata.size > 0) {
+            --_metadata.size;
+        }
+
+        write_node(leaf);
+
+        if (_metadata.size == 0) {
+            _metadata.root_page_id = INVALID_PAGE_ID;
+            _metadata.first_leaf_page_id = INVALID_PAGE_ID;
+            _metadata.height = 0;
+            return true;
+        }
+
+        // TODO: rebalance underfilled leaves with borrow/merge.
+        if (erased_index == 0 && !leaf.keys.empty() && leaf_search.path.size() > 1) {
+            const auto parent_page_id = leaf_search.path[leaf_search.path.size() - 2];
+            auto parent = read_node(parent_page_id);
+            if (parent.is_leaf) {
+                throw std::logic_error("Leaf node cannot be a parent");
+            }
+
+            const auto child_it = std::find(parent.children.begin(), parent.children.end(), leaf.page_id);
+            if (child_it == parent.children.end()) {
+                throw std::logic_error("Parent does not reference erased leaf");
+            }
+
+            const auto child_index = static_cast<std::size_t>(child_it - parent.children.begin());
+            if (child_index > 0) {
+                parent.keys[child_index - 1] = leaf.keys.front();
+                write_node(parent);
+            }
+        }
+
+        return true;
     }
 
     void BStarPlusIndex::not_implemented() {
@@ -669,4 +714,3 @@ namespace db {
     }
 
 } // namespace db
-
