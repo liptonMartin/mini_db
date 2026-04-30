@@ -251,12 +251,19 @@ void Page::release_slot(Slot &slot) {
  * @param data Значение, которое надо вставить
  * @exception InvalidWriteToPageException Не хватило места для вставки
  */
-void Page::insert_element(const std::vector<char> &data) {
+ptrdiff_t Page::insert_element(const std::vector<char> &data) {
     const auto len_data = std::ssize(data);
     const auto old_free_size = get_free_size();
     auto old_count_slots = get_count_slots();
 
-    if (len_data > old_free_size)
+    std::optional<ptrdiff_t> id_free_block;
+    try {
+        id_free_block = get_id_first_free_block();
+    } catch (SlotNotFoundException &) {
+    }
+
+    const auto required_size = len_data + (id_free_block.has_value() ? 0 : static_cast<ptrdiff_t>(sizeof(Slot)));
+    if (required_size > old_free_size)
         throw InvalidWriteToPageException("Page doesn't have space for insert element!");
 
     Slot last_slot;
@@ -267,29 +274,27 @@ void Page::insert_element(const std::vector<char> &data) {
     }
 
     const ptrdiff_t new_offset = last_slot.get_offset() - len_data;
+
     /* записываем новые данные по новому смещению */
     std::copy_n(data.begin(), len_data, _data.begin() + new_offset);
 
-    ptrdiff_t id_free_block;
-    try {
-        id_free_block = get_id_first_free_block(); /* ищет первый свободный блок */
-
+    if (id_free_block.has_value()) {
         update_free_size(old_free_size - len_data);
 
-        auto slot = get_slot(id_free_block);
+        auto slot = get_slot(*id_free_block);
 
         make_busy_slot(slot, new_offset, len_data);
-    } catch (SlotNotFoundException &) {
-        id_free_block = old_count_slots; /* индексация с нуля */
-        if (len_data + sizeof(Slot) > old_free_size)
-            throw InvalidWriteToPageException("Page doesn't have space for insert element!");
-
-        /* будем создавать новый слот*/
-        update_free_size(old_free_size - len_data - sizeof(Slot));
-
-        const Slot slot(id_free_block, new_offset, len_data);
-        add_new_slot(slot); /* самостоятельно увеличивает count_slots */
+        return *id_free_block;
     }
+
+    const auto new_slot_id = old_count_slots; /* индексация с нуля */
+
+    /* будем создавать новый слот */
+    update_free_size(old_free_size - len_data - static_cast<ptrdiff_t>(sizeof(Slot)));
+
+    const Slot slot(new_slot_id, new_offset, len_data);
+    add_new_slot(slot); /* самостоятельно увеличивает count_slots */
+    return new_slot_id;
 }
 
 void Page::erase_element(ptrdiff_t slot_id) {
@@ -351,6 +356,11 @@ std::vector<std::vector<char> > Page::get_slots_data() {
         slots_data.push_back(slot_data);
     }
     return slots_data;
+}
+
+std::vector<char> Page::get_slot_data_by_id(const ptrdiff_t slot_id) {
+    const auto slot = get_slot(slot_id);
+    return get_slot_data(slot);
 }
 
 
@@ -501,28 +511,28 @@ std::string Database::get_name() {
     return name;
 }
 
-void Database::insert_table(const std::string &name, const std::vector<Column> &columns) {
-    auto path = make_path_to_file(get_name());
-    Table(path, name, columns);
-
-    move_to_position_tables_begin();
-    const auto pos = _file.tellg();
-
-    ptrdiff_t count_tables;
-    _file.read(reinterpret_cast<char *>(&count_tables), sizeof(count_tables));
-
-    /* записываем название таблицы */
-    move_to_position_tables_end();
-    _file.seekp(_file.tellg()); /* синхронизировали указатели */
-
-    auto len_table_name = std::ssize(name);
-    _file.write(reinterpret_cast<const char *>(&len_table_name), sizeof(len_table_name));
-    _file.write(name.c_str(), len_table_name);
-
-    ++count_tables; /* добавили одну таблицу */
-    _file.seekp(pos); /* передвинули указатель на чтение, в место, где хранится количество таблиц */
-    _file.write(reinterpret_cast<const char *>(&count_tables), sizeof(count_tables));
-}
+// void Database::insert_table(const std::string &name, const std::vector<Column> &columns) {
+//     auto path = make_path_to_file(get_name());
+//     Table(path, name, columns);
+//
+//     move_to_position_tables_begin();
+//     const auto pos = _file.tellg();
+//
+//     ptrdiff_t count_tables;
+//     _file.read(reinterpret_cast<char *>(&count_tables), sizeof(count_tables));
+//
+//     /* записываем название таблицы */
+//     move_to_position_tables_end();
+//     _file.seekp(_file.tellg()); /* синхронизировали указатели */
+//
+//     auto len_table_name = std::ssize(name);
+//     _file.write(reinterpret_cast<const char *>(&len_table_name), sizeof(len_table_name));
+//     _file.write(name.c_str(), len_table_name);
+//
+//     ++count_tables; /* добавили одну таблицу */
+//     _file.seekp(pos); /* передвинули указатель на чтение, в место, где хранится количество таблиц */
+//     _file.write(reinterpret_cast<const char *>(&count_tables), sizeof(count_tables));
+// }
 
 std::vector<std::string> Database::get_tables() {
     move_to_position_tables_begin();

@@ -2,6 +2,10 @@
         test_common
         test_common.cpp
 )
+add_executable(
+        test_page_manager
+        test_page_manager.cpp
+)
 target_link_libraries(
         test_common
         PRIVATE
@@ -9,6 +13,17 @@ target_link_libraries(
 )
 target_include_directories(
         test_common
+        PRIVATE
+        ../include
+)
+target_link_libraries(
+        test_page_manager
+        PRIVATE
+        common
+        gtest
+)
+target_include_directories(
+        test_page_manager
         PRIVATE
         ../include
 )
