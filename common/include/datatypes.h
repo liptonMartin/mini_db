@@ -132,6 +132,8 @@ public:
      * @return Вектор из самих данных
      */
     std::vector<std::vector<char> > get_slots_data();
+
+    std::vector<char> get_slot_data_by_id(ptrdiff_t slot_id);
 };
 
 class PageManager {
@@ -147,9 +149,19 @@ public:
 
     ptrdiff_t search_free_page(ptrdiff_t need_size);
 
-    std::vector<char> read_page(ptrdiff_t page_id);
+    Page read_page(ptrdiff_t page_id) const;
 
-    void write_page(ptrdiff_t page_id, const std::vector<char> &data);
+    /**
+     * Обертка над Page::insert_element, записывает полезные данные (data) на страницу,
+     * автоматически изменяет PageHeader на странице
+     * Внимание, на странице должно быть свободное место для вставки!
+     * @param page_id ID страницы
+     * @param data Полезная информация, которую нужно добавить.
+     * @return ID slot, в который вставлен новый элемент
+     */
+    ptrdiff_t insert_element_into_page(ptrdiff_t page_id, const std::vector<char> &data) const;
+
+    void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id);
 };
 
 enum class DataType { Int, String };
@@ -264,7 +276,7 @@ class Database {
 
     void move_to_position_tables_end();
 
-    explicit Database(const std::string &name, bool need_to_create);
+    explicit Database(const std::string &name);
 
 public:
     static Database create_database(const std::string &name);

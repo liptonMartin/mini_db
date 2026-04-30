@@ -5,6 +5,7 @@ add_library(
         include/command.h
         src/command.cpp
         include/exceptions.h
+        src/page_manager.cpp
 )
 
 target_include_directories(
