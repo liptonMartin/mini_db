@@ -126,7 +126,7 @@ public:
 
     std::vector<char> get_page_data();
 
-    void insert_element(const std::vector<char> &data);
+    ptrdiff_t insert_element(const std::vector<char> &data);
 
     void erase_element(ptrdiff_t slot_id);
 
@@ -264,7 +264,7 @@ public:
                               const std::vector<Column> &columns);
     static Table load_table(const std::filesystem::path &path, const std::string &name);
 
-    void insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values); // TODO: impl it!
+    void insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values);
 
     void update_elements(const Condition &condition, const std::vector<Column> &columns,
                          const std::vector<Value> &values); // TODO: impl it!
@@ -296,7 +296,7 @@ class Database {
 
     void move_to_position_tables_end();
 
-    explicit Database(const std::string &name);
+    explicit Database(const std::string &name, bool need_create);
 
 public:
     static Database create_database(const std::string &name);

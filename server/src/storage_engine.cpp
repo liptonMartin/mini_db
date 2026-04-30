@@ -42,7 +42,7 @@ void StorageEngine::drop_database(const std::string &db_name) {
 
 void StorageEngine::insert_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                                     const std::vector<Column> &columns,
-                                    const std::vector<std::variant<int, std::string> > &values) {
+                                    const std::vector<Value> &values) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
         db.insert_elements(table_name, columns, values);

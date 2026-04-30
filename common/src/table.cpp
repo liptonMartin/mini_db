@@ -147,12 +147,13 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
 
     const auto buffer_size = buffer.size();
     buffer.resize(buffer_size);
-    if (buffer_size + sizeof(PageHeader) > db::PAGE_SIZE)
+    if (buffer_size + sizeof(PageHeader) + sizeof(Slot) > db::PAGE_SIZE)
         throw FailedInsertElementsToTableException("The data takes up too much memory!");
 
     PageManager page_manager(_file, get_pages_begin_offset());
     const auto page_id = page_manager.search_free_page(buffer_size);
-    page_manager.write_page(page_id, buffer);
+    // ReSharper disable once CppExpressionWithoutSideEffects
+    page_manager.insert_element_into_page(page_id, buffer);
 }
 
 
