@@ -256,7 +256,7 @@ public:
  * std::string name
  * ptrdiff_t size_columns
  * std::vector<Column> columns
- * ptrdiff_t size_pages
+ * ptrdiff_t count_pages
  */
 class Table {
     std::fstream _file;
@@ -266,6 +266,8 @@ class Table {
     void move_to_position_count_page();
 
     void move_to_position_pages();
+
+    void update_count_pages(ptrdiff_t count_pages);
 
     ptrdiff_t get_pages_begin_offset();
 
@@ -291,9 +293,9 @@ public:
     void update_elements(std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
                          const std::vector<Value> &values);
 
-    void delete_elements(std::unique_ptr<Condition> condition); // TODO: impl it!
+    void delete_elements(std::unique_ptr<Condition> condition);
 
-    std::vector<Row> select_elements(std::unique_ptr<Condition> condition); // TODO: impl it!
+    std::vector<Row> select_elements(std::unique_ptr<Condition> condition);
 
     std::string get_name();
 

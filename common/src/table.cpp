@@ -100,6 +100,7 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
     auto page_id = page_manager.search_free_page(static_cast<ptrdiff_t>(buffer_size));
     if (page_id == -1) {
         page_id = page_manager.allocate_page();
+        update_count_pages(get_count_pages() + 1);
     }
     // ReSharper disable once CppExpressionWithoutSideEffects
     page_manager.insert_element_into_page(page_id, buffer);
@@ -217,10 +218,11 @@ Row Table::get_completed_values(const std::vector<Column> &columns,
 std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
     std::vector<char> buffer{};
     ptrdiff_t offset = 0;
-    for (const auto &[column, value]: column_values) {
-        /* если значение может быть null, то перед каждым элементом будем держать bool значение,
-         * является ли дальнейший тип null
-         */
+
+    for (const auto &column: get_columns()) {
+        /* для поддержки правильного порядка столбцов */
+        const auto &value = column_values.at(column);
+
         if (column._is_nullable) {
             const auto is_null = std::holds_alternative<Null>(value);
             buffer.resize(offset + sizeof(is_null));
@@ -229,13 +231,13 @@ std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
         }
 
         if (std::holds_alternative<int>(value)) {
-            const auto &int_value = std::get<int>(value);
+            auto int_value = std::get<int>(value);
             buffer.resize(offset + sizeof(int_value));
             std::copy_n(reinterpret_cast<const char *>(&int_value), sizeof(int_value), buffer.begin() + offset);
             offset += sizeof(int_value);
         } else if (std::holds_alternative<std::string>(value)) {
             const auto &string_value = std::get<std::string>(value);
-            const auto &string_length = string_value.length();
+            auto string_length = string_value.length();
 
             buffer.resize(offset + sizeof(string_length) + string_length);
             /* записываем длину строки */
@@ -292,7 +294,7 @@ ptrdiff_t Table::get_count_pages() {
 Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<Column> &columns) {
     Row result;
     ptrdiff_t offset = 0;
-    for (const auto& column: columns) {
+    for (const auto &column: columns) {
         Value value;
         /* если колонка может быть null, то перед каждым значением лежит bool значение, может ли быть null */
         bool is_null = false;
@@ -313,8 +315,8 @@ Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<
                 case DataType::String:
                     /* считываем сначала длину строки */
                     size_t length_string;
-                    std::copy_n(data.begin() + offset, sizeof(size_t), reinterpret_cast<char *>(&length_string));
-                    offset += sizeof(size_t);
+                    std::copy_n(data.begin() + offset, sizeof(length_string), reinterpret_cast<char *>(&length_string));
+                    offset += sizeof(length_string);
 
                     /* считываем строку */
                     std::copy_n(data.begin() + offset, length_string, reinterpret_cast<char *>(&value));
@@ -329,7 +331,7 @@ Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<
 
 Row Table::get_empty_values() {
     Row result;
-    for (auto column: get_columns()) {
+    for (const auto &column: get_columns()) {
         result[column] = Null{};
     }
     return result;
@@ -342,6 +344,13 @@ ptrdiff_t Table::get_pages_begin_offset() {
     _file.seekg(0, std::ios::beg);
     const auto position_start_file = _file.tellg();
     return position_start_pages - position_start_file;
+}
+
+void Table::update_count_pages(const ptrdiff_t count_pages) {
+    move_to_position_count_page();
+
+    _file.seekp(_file.tellg());
+    _file.write(reinterpret_cast<const char *>(&count_pages), sizeof(count_pages));
 }
 
 void Table::move_to_position_pages() {

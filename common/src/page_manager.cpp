@@ -47,7 +47,7 @@ ptrdiff_t PageManager::allocate_page() {
     const auto page_data = page.get_page_data();
 
     _file.seekp(page_offset(page_id), std::ios::beg);
-    _file.write(page_data.data(), page_data.size());
+    _file.write(page_data.data(), static_cast<ptrdiff_t>(page_data.size()));
 
     if (!_file) {
         throw std::runtime_error(std::format("Cannot write page {}", page_id));
