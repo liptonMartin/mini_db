@@ -29,17 +29,17 @@ public:
 
     void insert_elements(const std::optional<std::string> &db_name, const std::string &table_name,
                          const std::vector<Column> &columns,
-                         const std::vector<Value > &values);
+                         const std::vector<Value> &values);
 
     void update_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                         const Condition &condition, const std::vector<Column> &columns,
+                         std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
                          const std::vector<Value> &values);
 
     void delete_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                         const Condition &condition);
+                         std::unique_ptr<Condition> condition);
 
-    std::vector<Value> select_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                                        const std::optional<Condition> &condition);
+    std::vector<Row> select_elements(const std::optional<std::string> &db_name, const std::string &table_name,
+                                       std::unique_ptr<Condition> condition);
 };
 
 

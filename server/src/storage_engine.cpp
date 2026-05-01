@@ -52,35 +52,35 @@ void StorageEngine::insert_elements(const std::optional<std::string> &db_name, c
 }
 
 void StorageEngine::update_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                                    const Condition &condition, const std::vector<Column> &columns,
+                                    std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
                                     const std::vector<Value> &values) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
-        db.update_elements(table_name, condition, columns, values);
+        db.update_elements(table_name, std::move(condition), columns, values);
     } else if (_db) {
-        _db->update_elements(table_name, condition, columns, values);
+        _db->update_elements(table_name, std::move(condition), columns, values);
     } else throw DatabaseIsNotChosenException();
 }
 
 void StorageEngine::delete_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                                    const Condition &condition) {
+                                    std::unique_ptr<Condition> condition) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
-        db.delete_elements(table_name, condition);
+        db.delete_elements(table_name, std::move(condition));
     } else if (_db) {
-        _db->delete_elements(table_name, condition);
+        _db->delete_elements(table_name, std::move(condition));
     } else throw DatabaseIsNotChosenException();
 }
 
-std::vector<Value> StorageEngine::select_elements(const std::optional<std::string> &db_name,
-                                                   const std::string &table_name,
-                                                   const std::optional<Condition> &condition) {
+std::vector<Row> StorageEngine::select_elements(const std::optional<std::string> &db_name,
+                                                  const std::string &table_name,
+                                                  std::unique_ptr<Condition> condition) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
-        return db.select_elements(table_name, condition);
+        return db.select_elements(table_name, std::move(condition));
     }
     if (_db) {
-        return _db->select_elements(table_name, condition);
+        return _db->select_elements(table_name, std::move(condition));
     }
     throw DatabaseIsNotChosenException();
 }
