@@ -173,15 +173,15 @@ public:
 
     void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const;
 
-    void update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const; // TODO: impl it!
+    void update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const;
 };
 
-enum class DataType { Int, String, Null };
+enum class DataType { Int, String };
 
 class Column {
     ptrdiff_t _column_id = -1;
     std::string _name = "";
-    DataType _type = DataType::Null;
+    DataType _type = DataType::Int;
     bool _is_nullable = false;
     bool _is_indexed = false;
 
@@ -217,7 +217,7 @@ public:
      * @param column_values Словарь данных со строки. Ключ - колонка, значение - значение в этой колонке
      * @return True - условие выполняется, False - условие не выполняется
      */
-    virtual bool evaluate(const Row& column_values) const = 0;
+    virtual bool evaluate(const Row &column_values) const = 0;
 };
 
 class ComparisonCondition : public Condition {
@@ -227,7 +227,7 @@ class ComparisonCondition : public Condition {
 public:
     ComparisonCondition(Column column, ComparisonDataType comparison_type, std::any value);
 
-    bool evaluate(const Row& column_values) const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 class BetweenCondition : public Condition {
@@ -237,7 +237,7 @@ class BetweenCondition : public Condition {
 public:
     BetweenCondition(Column column, Column column_start, Column column_end);
 
-    bool evaluate(const Row& column_values) const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 class RegexCondition : public Condition {
@@ -246,7 +246,7 @@ class RegexCondition : public Condition {
 public:
     RegexCondition(Column column, std::string regex);
 
-    bool evaluate(const Row& column_values) const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 
@@ -273,12 +273,14 @@ class Table {
 
     Row get_completed_values(const std::vector<Column> &columns, const std::vector<Value> &values);
 
-    std::vector<char> get_bytes_from_row(const Row& column_values);
+    std::vector<char> get_bytes_from_row(const Row &column_values);
 
     explicit Table(const std::filesystem::path &path, const std::string &name,
                    const std::optional<std::vector<Column> > &columns, bool need_create);
 
 public:
+    Table() = default;
+
     static Table create_table(const std::filesystem::path &path, const std::string &name,
                               const std::vector<Column> &columns);
 
@@ -300,7 +302,7 @@ public:
     ptrdiff_t get_count_pages();
 
     static Row get_values_from_row(const std::vector<char> &data,
-                                                       const std::vector<Column> &columns);
+                                   const std::vector<Column> &columns);
 };
 
 /**
@@ -339,12 +341,13 @@ public:
     void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
                          const std::vector<Value> &values);
 
-    void update_elements(const std::string &table_name, const Condition &condition, const std::vector<Column> &columns,
+    void update_elements(const std::string &table_name, std::unique_ptr<Condition> condition,
+                         const std::vector<Column> &columns,
                          const std::vector<Value> &values);
 
-    void delete_elements(const std::string &table_name, const Condition &condition);
+    void delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
-    std::vector<Value> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
+    std::vector<Row> select_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
     std::string get_name();
 

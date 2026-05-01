@@ -97,7 +97,10 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
         throw FailedInsertElementsToTableException("The data takes up too much memory!");
 
     PageManager page_manager(_file, get_pages_begin_offset());
-    const auto page_id = page_manager.search_free_page(buffer_size);
+    auto page_id = page_manager.search_free_page(static_cast<ptrdiff_t>(buffer_size));
+    if (page_id == -1) {
+        page_id = page_manager.allocate_page();
+    }
     // ReSharper disable once CppExpressionWithoutSideEffects
     page_manager.insert_element_into_page(page_id, buffer);
 }
@@ -205,9 +208,6 @@ Row Table::get_completed_values(const std::vector<Column> &columns,
                         "has integer type");
                 break;
             }
-            case DataType::Null:
-                /* Null не может быть */
-                throw FailedInsertElementsToTableException("The database has invalid table" + get_name() + "!");
         }
     }
 
@@ -216,26 +216,35 @@ Row Table::get_completed_values(const std::vector<Column> &columns,
 
 std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
     std::vector<char> buffer{};
+    ptrdiff_t offset = 0;
     for (const auto &[column, value]: column_values) {
-        switch (column._type) {
-            case DataType::Int: {
-                /* просто записываем */
-                const auto &int_value = std::get<int>(value);
-                std::copy_n(reinterpret_cast<const char *>(&int_value), sizeof(int_value), buffer.end());
-                break;
-            }
-            case DataType::String: {
-                const auto &string_value = std::get<std::string>(value);
-                const auto &string_length = string_value.length();
+        /* если значение может быть null, то перед каждым элементом будем держать bool значение,
+         * является ли дальнейший тип null
+         */
+        if (column._is_nullable) {
+            const auto is_null = std::holds_alternative<Null>(value);
+            buffer.resize(offset + sizeof(is_null));
+            std::copy_n(reinterpret_cast<const char *>(&is_null), sizeof(is_null), buffer.begin() + offset);
+            offset += sizeof(is_null);
+        }
 
-                /* сначала записываем длину строки */
-                std::copy_n(reinterpret_cast<const char *>(&string_length), sizeof(string_length), buffer.end());
-                std::copy_n(string_value.c_str(), sizeof(string_value), buffer.end());
-                break;
-            }
-            case DataType::Null:
-                /* вообще не будем ничего записывать */
-                break;
+        if (std::holds_alternative<int>(value)) {
+            const auto &int_value = std::get<int>(value);
+            buffer.resize(offset + sizeof(int_value));
+            std::copy_n(reinterpret_cast<const char *>(&int_value), sizeof(int_value), buffer.begin() + offset);
+            offset += sizeof(int_value);
+        } else if (std::holds_alternative<std::string>(value)) {
+            const auto &string_value = std::get<std::string>(value);
+            const auto &string_length = string_value.length();
+
+            buffer.resize(offset + sizeof(string_length) + string_length);
+            /* записываем длину строки */
+            std::copy_n(reinterpret_cast<const char *>(&string_length), sizeof(string_length), buffer.begin() + offset);
+            offset += sizeof(string_length);
+
+            /* записываем саму строку */
+            std::copy_n(string_value.c_str(), string_length, buffer.begin() + offset);
+            offset += static_cast<ptrdiff_t>(string_length);
         }
     }
     return buffer;
@@ -283,28 +292,35 @@ ptrdiff_t Table::get_count_pages() {
 Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<Column> &columns) {
     Row result;
     ptrdiff_t offset = 0;
-    for (const auto column: columns) {
+    for (const auto& column: columns) {
         Value value;
-        switch (column._type) {
-            case DataType::Int:
-                /* считываем один элемент */
-                std::copy_n(data.begin() + offset, sizeof(int), reinterpret_cast<char *>(&value));
-                offset += sizeof(int);
-                break;
-            case DataType::String:
-                /* считываем сначала длину строки */
-                size_t length_string;
-                std::copy_n(data.begin() + offset, sizeof(size_t), reinterpret_cast<char *>(&length_string));
-                offset += sizeof(size_t);
+        /* если колонка может быть null, то перед каждым значением лежит bool значение, может ли быть null */
+        bool is_null = false;
+        if (column._is_nullable) {
+            std::copy_n(data.begin() + offset, sizeof(is_null), reinterpret_cast<char *>(&is_null));
+            offset += sizeof(is_null);
+        }
 
-                /* считываем строку */
-                std::copy_n(data.begin() + offset, length_string, reinterpret_cast<char *>(&value));
-                offset += length_string;
-                break;
-            case DataType::Null:
-                /* Null не записан в таблице */
-                value = Null{};
-                break;
+        if (is_null) value = Null{};
+
+        else {
+            switch (column._type) {
+                case DataType::Int:
+                    /* считываем один элемент */
+                    std::copy_n(data.begin() + offset, sizeof(int), reinterpret_cast<char *>(&value));
+                    offset += sizeof(int);
+                    break;
+                case DataType::String:
+                    /* считываем сначала длину строки */
+                    size_t length_string;
+                    std::copy_n(data.begin() + offset, sizeof(size_t), reinterpret_cast<char *>(&length_string));
+                    offset += sizeof(size_t);
+
+                    /* считываем строку */
+                    std::copy_n(data.begin() + offset, length_string, reinterpret_cast<char *>(&value));
+                    offset += static_cast<ptrdiff_t>(length_string);
+                    break;
+            }
         }
         result[column] = value;
     }

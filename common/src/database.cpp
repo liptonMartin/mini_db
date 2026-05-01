@@ -114,30 +114,29 @@ void Database::insert_elements(const std::string &table_name, const std::vector<
     table.insert_elements(columns, values);
 }
 
-void Database::update_elements(const std::string &table_name, const Condition &condition,
+void Database::update_elements(const std::string &table_name, std::unique_ptr<Condition> condition,
                                const std::vector<Column> &columns, const std::vector<Value> &values) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    table.update_elements(condition, columns, values);
+    table.update_elements(std::move(condition), columns, values);
 }
 
-void Database::delete_elements(const std::string &table_name, const Condition &condition) {
+void Database::delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    table.delete_elements(condition);
+    table.delete_elements(std::move(condition));
 }
 
-std::vector<Value>
-Database::select_elements(const std::string &table_name, const std::optional<Condition> &condition) {
+std::vector<Row> Database::select_elements(const std::string &table_name, std::unique_ptr<Condition> condition) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    return table.select_elements(condition);
+    return table.select_elements(std::move(condition));
 }
 
 std::string Database::get_name() {
