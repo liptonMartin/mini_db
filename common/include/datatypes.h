@@ -4,15 +4,25 @@
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
 #include <any>
-#include <cstddef>
 #include <filesystem>
 #include <vector>
 #include <string>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <variant>
 
-using Values = std::variant<int, std::string>;
+
+class Null {
+public:
+    bool operator==(const Null &) const = default;
+};
+
+class Column;
+
+/* ========================================== ALIASES ========================================== */
+using Value = std::variant<int, std::string, Null>;
+using Row = std::map<Column, Value>;
 
 /**
  * _free_size - количество в байтах свободного места на странице
@@ -128,6 +138,8 @@ public:
 
     void erase_element(ptrdiff_t slot_id);
 
+    void update_element(ptrdiff_t slot_id, const std::vector<char> &data);
+
     /**
      * @return Вектор из самих данных
      */
@@ -161,21 +173,32 @@ public:
      */
     ptrdiff_t insert_element_into_page(ptrdiff_t page_id, const std::vector<char> &data) const;
 
-    void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id);
+    void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const;
+
+    void update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const;
 };
 
 enum class DataType { Int, String };
 
 class Column {
+    ptrdiff_t _column_id = -1;
     std::string _name = "";
-    DataType _type;
+    DataType _type = DataType::Int;
+    bool _is_nullable = false;
+    bool _is_indexed = false;
 
     friend class Table;
 
 public:
     Column() = default;
 
-    explicit Column(const std::string &name, const DataType type);
+    bool operator<(const Column &column) const;
+
+    bool operator==(const Column &column) const;
+
+    explicit Column(const std::string &name, DataType type, bool is_nullable = false, bool is_indexed = false);
+
+    explicit Column(ptrdiff_t column_id, const std::string &name, DataType type, bool is_nullable, bool is_indexed);
 };
 
 
@@ -195,7 +218,12 @@ class Condition {
 public:
     virtual ~Condition() = default;
 
-    virtual bool evaluate() const = 0;
+    /**
+     * Полиморфная функция для единого интерфейса для каждого условия
+     * @param column_values Словарь данных со строки. Ключ - колонка, значение - значение в этой колонке
+     * @return True - условие выполняется, False - условие не выполняется
+     */
+    virtual bool evaluate(const Row &column_values) const = 0;
 };
 
 class ComparisonCondition : public Condition {
@@ -205,7 +233,7 @@ class ComparisonCondition : public Condition {
 public:
     ComparisonCondition(Column column, ComparisonDataType comparison_type, std::any value);
 
-    bool evaluate() const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 class BetweenCondition : public Condition {
@@ -215,7 +243,7 @@ class BetweenCondition : public Condition {
 public:
     BetweenCondition(Column column, Column column_start, Column column_end);
 
-    bool evaluate() const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 class RegexCondition : public Condition {
@@ -224,7 +252,7 @@ class RegexCondition : public Condition {
 public:
     RegexCondition(Column column, std::string regex);
 
-    bool evaluate() const override;
+    bool evaluate(const Row &column_values) const override;
 };
 
 
@@ -234,30 +262,55 @@ public:
  * std::string name
  * ptrdiff_t size_columns
  * std::vector<Column> columns
- * ptrdiff_t size_pages
- * std::vector<Page> pages
+ * ptrdiff_t count_pages
  */
 class Table {
     std::fstream _file;
 
     void move_to_position_columns();
 
+    void move_to_position_count_page();
+
+    void move_to_position_pages();
+
+    void update_count_pages(ptrdiff_t count_pages);
+
+    ptrdiff_t get_pages_begin_offset();
+
+    Row get_empty_values();
+
+    Row get_completed_values(const std::vector<Column> &columns, const std::vector<Value> &values);
+
+    std::vector<char> get_bytes_from_row(const Row &column_values);
+
+    explicit Table(const std::filesystem::path &path, const std::string &name,
+                   const std::optional<std::vector<Column> > &columns, bool need_create);
+
 public:
-    explicit Table(const std::filesystem::path &path, const std::string &name, const std::vector<Column> &columns);
+    Table() = default;
+
+    static Table create_table(const std::filesystem::path &path, const std::string &name,
+                              const std::vector<Column> &columns);
+
+    static Table load_table(const std::filesystem::path &path, const std::string &name);
+
+    void insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values);
+
+    void update_elements(std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+                         const std::vector<Value> &values);
+
+    void delete_elements(std::unique_ptr<Condition> condition);
+
+    std::vector<Row> select_elements(std::unique_ptr<Condition> condition);
 
     std::string get_name();
 
     std::vector<Column> get_columns();
 
-    std::vector<Page> get_pages();
+    ptrdiff_t get_count_pages();
 
-    void insert_elements(); // TODO: edit declaration
-
-    void update_elements(); // TODO: edit declaration
-
-    void delete_elements(); // TODO: edit declaration
-
-    std::vector<Values> select_elements(); // TODO: edit declaration
+    static Row get_values_from_row(const std::vector<char> &data,
+                                   const std::vector<Column> &columns);
 };
 
 /**
@@ -276,36 +329,37 @@ class Database {
 
     void move_to_position_tables_end();
 
-    explicit Database(const std::string &name);
+    explicit Database(const std::string &name, bool need_create);
 
 public:
     static Database create_database(const std::string &name);
+
     static Database load_database(const std::string &name);
 
     /**
      *
-     * @param db_name Имя базы данных
-     * @exception DatabaseDoesNotExistException Попытка удалить несуществующей базы данных
+     * @exception DatabaseDoesNotExistException Попытка удалить несуществующую базу данных
      */
-    void drop_database(const std::string& db_name);
+    void drop_database();
+
+    void create_table(const std::string &name, const std::vector<Column> &columns);
+
+    void drop_table(const std::string &name);
+
+    void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
+                         const std::vector<Value> &values);
+
+    void update_elements(const std::string &table_name, std::unique_ptr<Condition> condition,
+                         const std::vector<Column> &columns,
+                         const std::vector<Value> &values);
+
+    void delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
+
+    std::vector<Row> select_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
     std::string get_name();
 
     std::vector<std::string> get_tables();
-
-    void create_table(const std::string &name, const std::vector<Column> &columns);
-
-    void drop_table(const std::string &name); // TODO: impl it!
-
-    void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
-                         const std::vector<std::variant<int, std::string> > &values); // TODO: impl it!
-
-    void update_elements(const std::string &table_name, const Condition &condition, const std::vector<Column> &columns,
-                         const std::vector<Values> &values); // TODO: impl it!
-
-    void delete_elements(const std::string &table_name, const Condition &condition); // TODO: impl it!
-
-    std::vector<Values> select_elements(const std::string &table_name, const std::optional<Condition> &condition);
 };
 
 

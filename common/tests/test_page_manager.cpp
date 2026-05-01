@@ -7,7 +7,7 @@
 #include "datatypes.h"
 
 
-class TestFile : public ::testing::Test {
+class FileTest : public ::testing::Test {
 protected:
     void SetUp() override {
         test_file.open(test_file_name, std::ios::trunc | std::ios::out | std::ios::in);
@@ -22,13 +22,13 @@ protected:
 };
 
 
-TEST_F(TestFile, TestAllocateFirstPage) {
+TEST_F(FileTest, TestAllocateFirstPage) {
     PageManager page_manager(test_file, 0);
     const auto page_id = page_manager.allocate_page();
     ASSERT_EQ(page_id, 0);
 }
 
-TEST_F(TestFile, TestReadFile) {
+TEST_F(FileTest, TestReadFile) {
     PageManager page_manager(test_file, 0);
     const auto page_id = page_manager.allocate_page();
 
@@ -38,7 +38,7 @@ TEST_F(TestFile, TestReadFile) {
     ASSERT_EQ(page.get_page_data(), expected_page.get_page_data());
 }
 
-TEST_F(TestFile, TestAllocateSeveralPages) {
+TEST_F(FileTest, TestAllocateSeveralPages) {
     PageManager page_manager(test_file, 0);
 
     const auto page_id_1 = page_manager.allocate_page();
@@ -54,7 +54,7 @@ TEST_F(TestFile, TestAllocateSeveralPages) {
     ASSERT_EQ(page_id_5, 4);
 }
 
-TEST_F(TestFile, TestInsertIntoPage) {
+TEST_F(FileTest, TestInsertIntoPage) {
     PageManager page_manager(test_file, 0);
 
     const auto page_id = page_manager.allocate_page();
@@ -67,7 +67,7 @@ TEST_F(TestFile, TestInsertIntoPage) {
     ASSERT_EQ(page.get_slot_data_by_id(slot_id), data);
 }
 
-TEST_F(TestFile, TestEraseFromPage) {
+TEST_F(FileTest, TestEraseFromPage) {
     PageManager page_manager(test_file, 0);
 
     const auto page_id = page_manager.allocate_page();
@@ -85,7 +85,7 @@ TEST_F(TestFile, TestEraseFromPage) {
     ASSERT_EQ(page.get_free_size(), expected_size_page);
 }
 
-TEST_F(TestFile, E2ETestPageManager) {
+TEST_F(FileTest, E2ETestPageManager) {
     PageManager page_manager(test_file, 0);
 
     const auto page_id_1 = page_manager.allocate_page();

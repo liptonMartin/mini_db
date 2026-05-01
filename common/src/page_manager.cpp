@@ -47,7 +47,7 @@ ptrdiff_t PageManager::allocate_page() {
     const auto page_data = page.get_page_data();
 
     _file.seekp(page_offset(page_id), std::ios::beg);
-    _file.write(page_data.data(), page_data.size());
+    _file.write(page_data.data(), static_cast<ptrdiff_t>(page_data.size()));
 
     if (!_file) {
         throw std::runtime_error(std::format("Cannot write page {}", page_id));
@@ -126,13 +126,32 @@ ptrdiff_t PageManager::insert_element_into_page(const ptrdiff_t page_id, const s
     return slot_id;
 }
 
-void PageManager::erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) {
+void PageManager::erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const {
     if (!_file.is_open()) {
         throw std::runtime_error("PageManager file is not open");
     }
 
     auto page = read_page(page_id);
     page.erase_element(slot_id);
+
+    const auto page_data = page.get_page_data();
+
+    _file.clear();
+    _file.seekp(page_offset(page_id), std::ios::beg);
+    _file.write(page_data.data(), static_cast<std::streamsize>(page_data.size()));
+
+    if (!_file) {
+        throw std::runtime_error(std::format("Cannot write page {}", page_id));
+    }
+}
+
+void PageManager::update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const {
+    if (!_file.is_open()) {
+        throw std::runtime_error("PageManager file is not open");
+    }
+
+    auto page = read_page(page_id);
+    page.update_element(slot_id, data);
 
     const auto page_data = page.get_page_data();
 
