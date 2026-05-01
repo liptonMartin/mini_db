@@ -1,9 +1,13 @@
 ﻿add_library(
         server
         include/storage_engine.h
+        include/request_handler.h
         include/lexer.h
+        include/command.h
         src/storage_engine.cpp
+        src/request_handler.cpp
         src/lexer.cpp
+        src/command.cpp
 )
 
 target_include_directories(
@@ -11,11 +15,6 @@ target_include_directories(
         PUBLIC
         ./include
         ../common/include
-)
-target_link_libraries(
-        server
-        PUBLIC
-        common
 )
 target_link_libraries(
         server

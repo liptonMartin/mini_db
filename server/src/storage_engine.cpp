@@ -73,8 +73,8 @@ void StorageEngine::delete_elements(const std::optional<std::string> &db_name, c
 }
 
 std::vector<Row> StorageEngine::select_elements(const std::optional<std::string> &db_name,
-                                                  const std::string &table_name,
-                                                  std::unique_ptr<Condition> condition) {
+                                                const std::string &table_name,
+                                                std::unique_ptr<Condition> condition) {
     if (db_name) {
         auto db = Database::load_database(db_name.value());
         return db.select_elements(table_name, std::move(condition));

@@ -14,6 +14,9 @@ class StorageEngine {
     std::optional<Database> _db;
 
 public:
+    StorageEngine() = default;
+    StorageEngine(Database db);
+
     std::string ping();
 
     void create_database(const std::string &db_name);
