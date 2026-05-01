@@ -16,8 +16,16 @@ Column::Column(const std::string &name, const DataType type, const bool is_nulla
     : _name(name), _type(type), _is_nullable(is_nullable), _is_indexed(is_indexed) {
 }
 
+Column::Column(ptrdiff_t column_id, const std::string &name, DataType type, bool is_nullable, bool is_indexed)
+    : _column_id(column_id), _name(name), _type(type), _is_nullable(is_nullable), _is_indexed(is_indexed) {
+}
+
 bool Column::operator<(const Column &column) const {
     return _name < column._name;
+}
+
+bool Column::operator==(const Column &column) const {
+    return _name == column._name;
 }
 
 /**
@@ -58,15 +66,28 @@ Table::Table(const std::filesystem::path &path, const std::string &name,
         _file.write(name.c_str(), len_name);
 
         /* записываем столбцы */
-        // TODO: нужно заполнить column_id!
         const auto count_columns = std::ssize(columns.value());
         _file.write(reinterpret_cast<const char *>(&count_columns), sizeof(count_columns));
 
+        ptrdiff_t column_id = 0;
         for (const auto &column: columns.value()) {
+            /* записываем column_id */
+            _file.write(reinterpret_cast<const char *>(&column_id), sizeof(column_id));
+            ++column_id;
+
+            /* записываем длину имени и само имя столбца */
             const auto len_column_name = std::ssize(column._name);
             _file.write(reinterpret_cast<const char *>(&len_column_name), sizeof(len_column_name));
             _file.write(column._name.c_str(), len_column_name);
+
+            /* записываем тип столбца */
             _file.write(reinterpret_cast<const char *>(&column._type), sizeof(column._type));
+
+            /* записываем поле is_nullable */
+            _file.write(reinterpret_cast<const char *>(&column._is_nullable), sizeof(column._is_nullable));
+
+            /* записываем поле is_indexed */
+            _file.write(reinterpret_cast<const char *>(&column._is_indexed), sizeof(column._is_indexed));
         }
 
         /* записываем информацию о количестве страниц */
@@ -266,18 +287,37 @@ std::vector<Column> Table::get_columns() {
     move_to_position_columns();
 
     ptrdiff_t count_columns;
+
+    ptrdiff_t column_id;
     ptrdiff_t len_column_name;
     std::string column_name;
     DataType column_type;
+    bool is_nullable;
+    bool is_indexed;
+
     std::vector<Column> columns;
 
     _file.read(reinterpret_cast<char *>(&count_columns), sizeof(count_columns));
     for (auto i = 0; i < count_columns; ++i) {
+        /* считываем id колонки */
+        _file.read(reinterpret_cast<char *>(&column_id), sizeof(column_id));
+
+        /* считываем длину имени и само имя столбца */
         _file.read(reinterpret_cast<char *>(&len_column_name), sizeof(len_column_name));
         column_name.resize(len_column_name);
         _file.read(&column_name[0], len_column_name);
+
+        /* считываем тип столбца */
         _file.read(reinterpret_cast<char *>(&column_type), sizeof(column_type));
-        columns.emplace_back(column_name, column_type);
+
+        /* считываем is_nullable */
+        _file.read(reinterpret_cast<char *>(&is_nullable), sizeof(is_nullable));
+
+        /* считываем is_indexed */
+        _file.read(reinterpret_cast<char *>(&is_indexed), sizeof(is_indexed));
+
+        const auto column = Column(column_id, column_name, column_type, is_nullable, is_indexed);
+        columns.push_back(column);
     }
 
     return columns;
@@ -309,8 +349,10 @@ Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<
             switch (column._type) {
                 case DataType::Int:
                     /* считываем один элемент */
-                    std::copy_n(data.begin() + offset, sizeof(int), reinterpret_cast<char *>(&value));
+                    int value_int;
+                    std::copy_n(data.begin() + offset, sizeof(int), reinterpret_cast<char *>(&value_int));
                     offset += sizeof(int);
+                    value = value_int;
                     break;
                 case DataType::String:
                     /* считываем сначала длину строки */
@@ -319,8 +361,11 @@ Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<
                     offset += sizeof(length_string);
 
                     /* считываем строку */
-                    std::copy_n(data.begin() + offset, length_string, reinterpret_cast<char *>(&value));
+                    std::string string_value;
+                    string_value.resize(length_string);
+                    std::copy_n(data.begin() + offset, length_string, &string_value[0]);
                     offset += static_cast<ptrdiff_t>(length_string);
+                    value = string_value;
                     break;
             }
         }

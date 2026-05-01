@@ -14,6 +14,8 @@
 
 
 class Null {
+public:
+    bool operator==(const Null &) const = default;
 };
 
 class Column;
@@ -192,7 +194,11 @@ public:
 
     bool operator<(const Column &column) const;
 
+    bool operator==(const Column &column) const;
+
     explicit Column(const std::string &name, DataType type, bool is_nullable = false, bool is_indexed = false);
+
+    explicit Column(ptrdiff_t column_id, const std::string &name, DataType type, bool is_nullable, bool is_indexed);
 };
 
 
