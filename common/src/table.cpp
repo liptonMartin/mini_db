@@ -88,6 +88,95 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
     if (columns.size() != values.size())
         throw FailedInsertElementsToTableException("Count columns not equal count values");
 
+    auto completed_values = get_completed_values(columns, values);
+    auto buffer = get_bytes_from_row(completed_values);
+
+    const auto buffer_size = buffer.size();
+    buffer.resize(buffer_size);
+    if (buffer_size + sizeof(PageHeader) + sizeof(Slot) > db::PAGE_SIZE)
+        throw FailedInsertElementsToTableException("The data takes up too much memory!");
+
+    PageManager page_manager(_file, get_pages_begin_offset());
+    const auto page_id = page_manager.search_free_page(buffer_size);
+    // ReSharper disable once CppExpressionWithoutSideEffects
+    page_manager.insert_element_into_page(page_id, buffer);
+}
+
+void Table::update_elements(std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+                            const std::vector<Value> &values) {
+    if (!condition)
+        throw FailedUpdateElementsToTableException("The update elements requires a condition!");
+
+    if (columns.size() != values.size())
+        throw FailedUpdateElementsToTableException("Count columns not equal count values");
+
+    const auto completed_values = get_completed_values(columns, values);
+
+    auto page_manager = PageManager(_file, get_pages_begin_offset());
+    const auto count_pages = get_count_pages();
+    for (auto page_id = 0; page_id < count_pages; ++page_id) {
+        auto page = page_manager.read_page(page_id);
+        for (auto slot_id = 0; slot_id < page.get_count_slots(); ++slot_id) {
+            const auto slot = page.get_slot(slot_id);
+            if (!slot.is_occupied()) continue;
+
+            const auto &slot_data = page.get_slot_data_by_id(slot_id);
+            const auto &row_data = get_values_from_row(slot_data, columns);
+
+            if (condition->evaluate(row_data)) {
+                /* обновляем данные */
+                const auto &bytes = get_bytes_from_row(row_data);
+                page_manager.update_element_into_page(page_id, slot_id, bytes); /* перезапишет файл */
+            }
+        }
+    }
+}
+
+void Table::delete_elements(std::unique_ptr<Condition> condition) {
+    if (!condition)
+        throw FailedDeleteElementsToTableException("The delete elements requires a condition!");
+
+    auto page_manager = PageManager(_file, get_pages_begin_offset());
+    const auto count_pages = get_count_pages();
+    const auto &columns = get_columns();
+    for (auto page_id = 0; page_id < count_pages; ++page_id) {
+        auto page = page_manager.read_page(page_id);
+        for (auto slot_id = 0; slot_id < page.get_count_slots(); ++slot_id) {
+            const auto slot = page.get_slot(slot_id);
+            if (!slot.is_occupied()) continue;
+
+            const auto &slot_data = page.get_slot_data_by_id(slot_id);
+            const auto &row_data = get_values_from_row(slot_data, columns);
+
+            if (condition->evaluate(row_data)) {
+                /* удаляем данные */
+                page_manager.erase_element_from_page(page_id, slot_id);
+            }
+        }
+    }
+}
+
+std::vector<Row> Table::select_elements(std::unique_ptr<Condition> condition) {
+    auto page_manager = PageManager(_file, get_pages_begin_offset());
+    const auto &columns = get_columns();
+    const auto count_pages = get_count_pages();
+    std::vector<Row> rows{};
+    for (auto page_id = 0; page_id < count_pages; ++page_id) {
+        auto page = page_manager.read_page(page_id);
+        for (const auto &slot_data: page.get_slots_data()) {
+            const auto &row_data = get_values_from_row(slot_data, columns);
+            if ((condition && condition->evaluate(row_data)) || !condition) {
+                /* если условия нет, то добавляем все элементы */
+                rows.push_back(row_data);
+            }
+        }
+    }
+
+    return rows;
+}
+
+Row Table::get_completed_values(const std::vector<Column> &columns,
+                                const std::vector<Value> &values) {
     auto column_values = get_empty_values();
     for (auto i = 0; i < columns.size(); ++i) {
         const auto column = columns[i];
@@ -121,21 +210,26 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
                 throw FailedInsertElementsToTableException("The database has invalid table" + get_name() + "!");
         }
     }
+
+    return column_values;
+}
+
+std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
     std::vector<char> buffer{};
     for (const auto &[column, value]: column_values) {
         switch (column._type) {
             case DataType::Int: {
                 /* просто записываем */
-                const auto& int_value = std::get<int>(value);
-                std::copy_n(reinterpret_cast<const char*>(&int_value), sizeof(int_value), buffer.end());
+                const auto &int_value = std::get<int>(value);
+                std::copy_n(reinterpret_cast<const char *>(&int_value), sizeof(int_value), buffer.end());
                 break;
             }
             case DataType::String: {
-                const auto& string_value = std::get<std::string>(value);
-                const auto& string_length = string_value.length();
+                const auto &string_value = std::get<std::string>(value);
+                const auto &string_length = string_value.length();
 
                 /* сначала записываем длину строки */
-                std::copy_n(reinterpret_cast<const char*>(&string_length), sizeof(string_length), buffer.end());
+                std::copy_n(reinterpret_cast<const char *>(&string_length), sizeof(string_length), buffer.end());
                 std::copy_n(string_value.c_str(), sizeof(string_value), buffer.end());
                 break;
             }
@@ -144,18 +238,8 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
                 break;
         }
     }
-
-    const auto buffer_size = buffer.size();
-    buffer.resize(buffer_size);
-    if (buffer_size + sizeof(PageHeader) + sizeof(Slot) > db::PAGE_SIZE)
-        throw FailedInsertElementsToTableException("The data takes up too much memory!");
-
-    PageManager page_manager(_file, get_pages_begin_offset());
-    const auto page_id = page_manager.search_free_page(buffer_size);
-    // ReSharper disable once CppExpressionWithoutSideEffects
-    page_manager.insert_element_into_page(page_id, buffer);
+    return buffer;
 }
-
 
 std::string Table::get_name() {
     _file.seekg(0, std::ios::beg); /* переместить в начало */
@@ -196,8 +280,39 @@ ptrdiff_t Table::get_count_pages() {
     return count_pages;
 }
 
-std::map<Column, Value> Table::get_empty_values() {
-    std::map<Column, Value> result;
+Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<Column> &columns) {
+    Row result;
+    ptrdiff_t offset = 0;
+    for (const auto column: columns) {
+        Value value;
+        switch (column._type) {
+            case DataType::Int:
+                /* считываем один элемент */
+                std::copy_n(data.begin() + offset, sizeof(int), reinterpret_cast<char *>(&value));
+                offset += sizeof(int);
+                break;
+            case DataType::String:
+                /* считываем сначала длину строки */
+                size_t length_string;
+                std::copy_n(data.begin() + offset, sizeof(size_t), reinterpret_cast<char *>(&length_string));
+                offset += sizeof(size_t);
+
+                /* считываем строку */
+                std::copy_n(data.begin() + offset, length_string, reinterpret_cast<char *>(&value));
+                offset += length_string;
+                break;
+            case DataType::Null:
+                /* Null не записан в таблице */
+                value = Null{};
+                break;
+        }
+        result[column] = value;
+    }
+    return result;
+}
+
+Row Table::get_empty_values() {
+    Row result;
     for (auto column: get_columns()) {
         result[column] = Null{};
     }

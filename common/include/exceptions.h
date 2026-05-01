@@ -88,4 +88,17 @@ public:
     }
 };
 
+class FailedUpdateElementsToTableException : public std::runtime_error {
+public:
+    explicit FailedUpdateElementsToTableException(const std::string &msg) : std::runtime_error(msg) {
+    }
+};
+
+class FailedDeleteElementsToTableException : public std::runtime_error {
+public:
+    explicit FailedDeleteElementsToTableException(const std::string &msg) : std::runtime_error(msg) {
+    }
+};
+
+
 #endif //MINIDB_EXCEPTIONS_H
