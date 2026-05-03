@@ -14,7 +14,7 @@ Database::Database(const std::string &name, const bool need_to_create) {
     auto path_to_file = make_path_to_file(name);
     if (!std::filesystem::exists(path_to_file) && need_to_create) {
         std::filesystem::create_directories(path_to_file);
-    } else {
+    } else if (std::filesystem::exists(path_to_file) && need_to_create) {
         throw DatabaseHasAlreadyExistsException(name);
     }
 
@@ -54,20 +54,14 @@ Database Database::load_database(const std::string &name) {
 
 void Database::drop_database() {
     auto db_name = get_name();
-    auto tables = get_tables();
-
-    for (auto &table_name: tables) {
-        drop_table(table_name);
-    }
-
     auto path = make_path_to_file(db_name);
 
     if (!std::filesystem::exists(path)) {
         throw DatabaseDoesNotExistException(db_name);
     }
 
-    const auto schema_path = path / (db_name + ".schema");
-    std::filesystem::remove(schema_path);
+    _file.close();
+    std::filesystem::remove_all(path); /* удаляем все файлы (а значит и таблицы) */
 }
 
 void Database::create_table(const std::string &name, const std::vector<Column> &columns) {
@@ -102,6 +96,7 @@ void Database::drop_table(const std::string &name) {
     }
 
     const auto table_path = path / (db_name + ".binary");
+    _file.close();
     std::filesystem::remove(table_path);
 }
 

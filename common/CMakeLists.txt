@@ -4,17 +4,20 @@ add_library(
         src/page.cpp
         src/slot.cpp
         src/table.cpp
-        src/command.cpp
         src/page_manager.cpp
         include/datatypes.h
         include/constants.h
         include/exceptions.h
-        include/command.h
 )
 
 target_include_directories(
         common
         PUBLIC
         ./include
+)
+target_link_libraries(
+        common
+        PUBLIC
+        nlohmann_json::nlohmann_json
 )
 add_subdirectory(tests)
