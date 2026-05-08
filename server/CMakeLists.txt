@@ -23,6 +23,16 @@ target_link_libraries(
         nlohmann_json::nlohmann_json
         taocpp::pegtl
 )
+add_executable(
+        main_server main.cpp
+)
+target_link_libraries(
+        main_server
+        PUBLIC
+        server
+        wsock32
+        ws2_32
+)
 add_subdirectory(tests)
 
 find_package(pegtl CONFIG REQUIRED)

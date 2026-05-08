@@ -1,0 +1,12 @@
+﻿add_executable(
+        main_client
+        main.cpp
+)
+target_link_libraries(
+        main_client
+        PUBLIC
+        common
+        nlohmann_json::nlohmann_json
+        wsock32
+        ws2_32
+)

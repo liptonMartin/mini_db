@@ -100,5 +100,28 @@ public:
     }
 };
 
+class FailedStartSocketException : public std::runtime_error {
+public:
+    explicit FailedStartSocketException() : std::runtime_error("Failed to start socket") {
+    }
+};
+
+class FailedSendDataException : public std::runtime_error {
+public:
+    explicit FailedSendDataException() : std::runtime_error("Failed to send data") {
+    }
+};
+
+class FailedReceiveDataException : public std::runtime_error {
+public:
+    explicit FailedReceiveDataException() : std::runtime_error("Failed to receive data") {
+    }
+};
+
+class InternalServerErrorException : public std::runtime_error {
+public:
+    explicit InternalServerErrorException() : std::runtime_error("Internal error!") {
+    }
+};
 
 #endif //MINIDB_EXCEPTIONS_H
