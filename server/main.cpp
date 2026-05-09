@@ -5,6 +5,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 #include "exceptions.h"
 
@@ -78,27 +79,42 @@ public:
      */
     int get_client_request(std::string &request) {
         /* считываем длину сообщения */
-        size_t length_data;
-        if (recv(_client_socket, reinterpret_cast<char *>(&length_data), sizeof(size_t), 0) == SOCKET_ERROR) {
-            std::cout << "Receive data from client failed!\n";
-            shutdown();
-            throw FailedReceiveDataException();
-        }
-
-        /* считываем само сообщение */
-        request.resize(length_data);
-        const int count_bytes = recv(_client_socket, request.data(), static_cast<int>(request.size()), 0);
+        uint32_t length_data;
+        int count_bytes = recv(_client_socket, reinterpret_cast<char *>(&length_data), sizeof(length_data), 0);
         if (count_bytes == SOCKET_ERROR) {
             std::cout << "Receive data from client failed!\n";
             shutdown();
             throw FailedReceiveDataException();
+        }
+        if (count_bytes == 0) {
+            std::cout << "Client closed connection!\n";
+            shutdown();
+            return 0;
+        }
+
+        if (length_data == 0) {
+            request = "";
+            return 1;
+        }
+
+        /* считываем само сообщение */
+        request.resize(length_data);
+        count_bytes = recv(_client_socket, request.data(), static_cast<int>(length_data), 0);
+        if (count_bytes == SOCKET_ERROR) {
+            std::cout << "Receive data from client failed!\n";
+            shutdown();
+            throw FailedReceiveDataException();
+        }
+        if (count_bytes == 0) {
+            std::cout << "Client closed connection!\n";
+            shutdown();
         }
         return count_bytes;
     }
 
     void send_response_to_client(const std::string &response) {
         /* сначала отправляем длину ответа */
-        const size_t length_data = response.size();
+        const uint32_t length_data = response.size();
         if (send(_client_socket, reinterpret_cast<const char *>(&length_data), sizeof(length_data) , 0) == SOCKET_ERROR) {
             std::cout << "Send data to client failed!\n";
             shutdown();
@@ -141,8 +157,16 @@ int main(int argc, char **argv) {
 
     std::string request;
     while (server_socket.get_client_request(request) != 0) {
-        // TODO: handle client request
-        server_socket.send_response_to_client(request);
+        nlohmann::json response;
+        if (request.empty()) {
+            /* Bad request */
+            response = {{"Message", "Bad request"}, {"Status", "400"}};
+        }
+        else {
+            // TODO: handle client request
+            response = nlohmann::json::parse(request);
+        }
+        server_socket.send_response_to_client(to_string(response));
     }
 
     return 0;

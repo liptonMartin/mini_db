@@ -59,7 +59,7 @@ public:
             throw FailedSendDataException();
         }
         /* сначала отправляем длину сообщения */
-        const size_t length_data = data.length();
+        const uint32_t length_data = data.length();
         const auto res = send(_server_socket, reinterpret_cast<const char *>(&length_data), sizeof(length_data), 0);
         if (res == SOCKET_ERROR) {
             std::cout << "Failed to send data to server\n";
@@ -84,7 +84,7 @@ public:
         }
 
         /* сначала считываем длину сообщения */
-        size_t length_data;
+        uint32_t length_data;
         int count_bytes = recv(_server_socket, reinterpret_cast<char *>(&length_data), sizeof(length_data), 0);
         if (count_bytes == SOCKET_ERROR) {
             std::cout << "Failed to receive data from server\n";
