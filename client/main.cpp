@@ -15,8 +15,8 @@ class ClientSocket {
 
     void shutdown() {
         if (_server_socket != INVALID_SOCKET) {
-            _server_socket = INVALID_SOCKET;
             closesocket(_server_socket);
+            _server_socket = INVALID_SOCKET;
         }
 
         WSACleanup();
