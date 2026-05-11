@@ -42,7 +42,7 @@ namespace db {
         PageId parent_page_id = INVALID_PAGE_ID;
         PageId next_leaf_page_id = INVALID_PAGE_ID;
         std::vector<IndexKey> keys;
-        std::vector<PageId> children;
+        std::vector<PageId> children; // instead of a pointer to children, we use PageId as the address of their location
         std::vector<RecordId> records;
 
         friend bool operator==(const IndexNode&, const IndexNode&) = default;
@@ -98,12 +98,28 @@ namespace db {
         void split_leaf(IndexNode& leaf, const std::vector<PageId>& path);
         bool try_give_to_right_leaf(IndexNode& leaf, IndexNode& parent, std::size_t child_index);
         bool try_give_to_left_leaf(IndexNode& leaf, IndexNode& parent, std::size_t child_index);
+        void redistribute_leaf_pair(IndexNode& left, IndexNode& right, IndexNode& parent,
+                                    const std::vector<PageId>& parent_path);
         void split_leaf_pair(IndexNode& left, IndexNode& right, IndexNode& parent, std::size_t parent_index,
                              const std::vector<PageId>& parent_path);
+        bool try_redistribute_internal_with_right(IndexNode& node, IndexNode& parent, std::size_t child_index,
+                                                  const std::vector<PageId>& parent_path);
+        bool try_redistribute_internal_with_left(IndexNode& node, IndexNode& parent, std::size_t child_index,
+                                                 const std::vector<PageId>& parent_path);
+        void redistribute_internal_pair(IndexNode& left, IndexNode& right, IndexNode& parent,
+                                        const std::vector<PageId>& parent_path);
+        void split_internal_pair(IndexNode& left, IndexNode& right, IndexNode& parent, std::size_t parent_index,
+                                 const std::vector<PageId>& parent_path);
         void split_internal(IndexNode& node, const std::vector<PageId>& path);
         void update_children_parent(const IndexNode& node);
-
-        [[noreturn]] static void not_implemented();
+        void fix_leaf_underflow(IndexNode& leaf, const std::vector<PageId>& path);
+        void fix_internal_underflow(IndexNode& node, const std::vector<PageId>& path);
+        void handle_internal_after_child_removed(IndexNode& node, const std::vector<PageId>& path);
+        void rebuild_internal_keys(IndexNode& node);
+        void promote_single_child_root(IndexNode& root);
+        IndexKey subtree_min_key(PageId page_id);
+        PageId leftmost_leaf_page_id(PageId page_id);
+        void propagate_subtree_min_change(PageId page_id, const std::vector<PageId>& path);
 
         IndexPageManager& _page_manager;
         BStarPlusIndexMetadata _metadata;
