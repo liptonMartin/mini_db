@@ -2,6 +2,7 @@
 // Created by rvova on 09.05.2026.
 //
 
+#include <windows.h>
 
 #include <constants.h>
 #include <boost/asio.hpp>
@@ -42,11 +43,11 @@ class StorageNode {
     }
 
     void async_read_header(CommandType command_type) {
-        auto length_data = std::make_shared<uint32_t>();
+        const auto length_data = std::make_shared<uint32_t>();
         boost::asio::async_read(
             _server_socket,
             boost::asio::buffer(length_data.get(), sizeof(*length_data)),
-            [this, command_type, length_data](boost::system::error_code ec, std::size_t length) {
+            [this, command_type, length_data](const boost::system::error_code& ec, std::size_t) {
                 if (ec) {
                     if (ec == boost::asio::error::eof) {
                         _logger->info("Connection closed by peer");
@@ -61,7 +62,7 @@ class StorageNode {
         );
     }
 
-    void async_read_request(CommandType command_type, uint32_t length_data) {
+    void async_read_request(CommandType command_type, const uint32_t length_data) {
         auto buffer = std::make_shared<std::string>();
         buffer->resize(length_data);
 
@@ -127,12 +128,12 @@ class StorageNode {
         async_send_response_to_server(response);
     }
 
-    void async_send_response_to_server(nlohmann::json response) {
+    void async_send_response_to_server(const nlohmann::json& response) {
         /* Отправляем длину ответа */
         const auto raw_response = response.dump();
-        uint32_t length_data = raw_response.size();
+        const uint32_t length_data = raw_response.size();
 
-        auto buffer = std::make_shared<std::vector<uint8_t> >();
+        const auto buffer = std::make_shared<std::vector<uint8_t> >();
         buffer->resize(sizeof(length_data) + length_data);
         memcpy(buffer->data(), &length_data, sizeof(length_data));
         memcpy(buffer->data() + sizeof(length_data), raw_response.data(), raw_response.size());
@@ -152,7 +153,10 @@ class StorageNode {
 
 public:
     explicit StorageNode() : _server_socket(_io_context) {
-        _logger = spdlog::stdout_color_mt("console");
+        const auto pid = GetCurrentProcessId();
+        const auto logger_name = "storage node (" + std::to_string(pid) + ")";
+
+        _logger = spdlog::stdout_color_mt(logger_name);
 
         _logger->info("Starting storage node");
 
