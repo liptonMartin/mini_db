@@ -10,7 +10,7 @@
 #include "exceptions.h"
 
 Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
-`    if (
+    if (
         count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES
         || count_storage_nodes > entrypoint::MAX_COUNT_STORAGE_NODES) {
         throw FailedStartEntrypointException();
