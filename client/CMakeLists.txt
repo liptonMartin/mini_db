@@ -7,6 +7,4 @@ target_link_libraries(
         PUBLIC
         common
         nlohmann_json::nlohmann_json
-        wsock32
-        ws2_32
 )

@@ -3,7 +3,6 @@
 
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
-#include <any>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -11,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <variant>
+#include <nlohmann/json.hpp>
 
 
 class Null {
@@ -23,6 +23,35 @@ class Column;
 /* ========================================== ALIASES ========================================== */
 using Value = std::variant<int, std::string, Null>;
 using Row = std::map<Column, Value>;
+
+inline nlohmann::json value_to_json(const Value& value) {
+    nlohmann::json j;
+
+    if (std::holds_alternative<int>(value)) {
+        j["type"] = "int";
+        j["value"] = std::get<int>(value);
+    } else if (std::holds_alternative<std::string>(value)) {
+        j["type"] = "string";
+        j["value"] = std::get<std::string>(value);
+    } else if (std::holds_alternative<Null>(value)) {
+        j["type"] = "null";
+        j["value"] = nullptr;
+    }
+
+    return j;
+}
+
+inline Value value_from_json(const nlohmann::json& j) {
+    std::string type = j.at("type");
+
+    if (type == "int") {
+        return j.at("value").get<int>();
+    } else if (type == "string") {
+        return j.at("value").get<std::string>();
+    } else { // null
+        return Null{};
+    }
+}
 
 /**
  * _free_size - количество в байтах свободного места на странице
@@ -199,6 +228,9 @@ public:
     explicit Column(const std::string &name, DataType type, bool is_nullable = false, bool is_indexed = false);
 
     explicit Column(ptrdiff_t column_id, const std::string &name, DataType type, bool is_nullable, bool is_indexed);
+
+    nlohmann::json to_json() const;
+    static Column from_json(const nlohmann::json& j);
 };
 
 
@@ -213,37 +245,44 @@ enum class ComparisonDataType {
 
 
 class Condition {
+protected:
     Column _column{};
 
 public:
+    explicit Condition(Column column) : _column(std::move(column)) {}
+
     virtual ~Condition() = default;
 
-    /**
-     * Полиморфная функция для единого интерфейса для каждого условия
-     * @param column_values Словарь данных со строки. Ключ - колонка, значение - значение в этой колонке
-     * @return True - условие выполняется, False - условие не выполняется
-     */
     virtual bool evaluate(const Row &column_values) const = 0;
-};
 
+    // Виртуальные методы сериализации
+    virtual nlohmann::json to_json() const = 0;
+
+    // Статический метод для десериализации
+    static std::unique_ptr<Condition> from_json(const nlohmann::json& j);
+};
 class ComparisonCondition : public Condition {
     ComparisonDataType _comparison_type;
-    std::any _value;
+    Value _value;
 
 public:
-    ComparisonCondition(Column column, ComparisonDataType comparison_type, std::any value);
+    ComparisonCondition(Column column, ComparisonDataType comparison_type, Value value);
 
     bool evaluate(const Row &column_values) const override;
+
+    nlohmann::json to_json() const override;
 };
 
 class BetweenCondition : public Condition {
-    Column _column_start;
-    Column _column_end;
+    Value _start;
+    Value _end;
 
 public:
-    BetweenCondition(Column column, Column column_start, Column column_end);
+    BetweenCondition(Column column, Value start, Value end);
 
     bool evaluate(const Row &column_values) const override;
+
+    nlohmann::json to_json() const override;
 };
 
 class RegexCondition : public Condition {
@@ -253,8 +292,9 @@ public:
     RegexCondition(Column column, std::string regex);
 
     bool evaluate(const Row &column_values) const override;
-};
 
+    nlohmann::json to_json() const override;
+};
 
 /**
  * На первой страницы файла {name}.binary хранится :

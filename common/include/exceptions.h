@@ -124,4 +124,10 @@ public:
     }
 };
 
+class FailedStartEntrypointException : public std::runtime_error {
+public:
+    explicit FailedStartEntrypointException() : std::runtime_error("Failed to start entrypoint") {
+    }
+};
+
 #endif //MINIDB_EXCEPTIONS_H

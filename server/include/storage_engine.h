@@ -11,38 +11,31 @@
 #include "datatypes.h"
 
 class StorageEngine {
-    std::optional<Database> _db;
-
 public:
     StorageEngine() = default;
-    StorageEngine(Database db);
 
-    std::string ping();
+    static void create_database(const std::string &db_name);
 
-    void create_database(const std::string &db_name);
+    static void drop_database(const std::string &db_name);
 
-    void drop_database(const std::string &db_name);
+    static void create_table(const std::string &db_name, const std::string &table_name,
+                             const std::vector<Column> &columns);
 
-    void use_database(const std::string &db_name);
+    static void drop_table(const std::string &db_name, const std::string &table_name);
 
-    void create_table(const std::optional<std::string> &db_name, const std::string &table_name,
-                      const std::vector<Column> &columns);
+    static void insert_elements(const std::string &db_name, const std::string &table_name,
+                                const std::vector<Column> &columns,
+                                const std::vector<Value> &values);
 
-    void drop_table(const std::optional<std::string> &db_name, const std::string &table_name);
+    static void update_elements(const std::string &db_name, const std::string &table_name,
+                                std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+                                const std::vector<Value> &values);
 
-    void insert_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                         const std::vector<Column> &columns,
-                         const std::vector<Value> &values);
+    static void delete_elements(const std::string &db_name, const std::string &table_name,
+                                std::unique_ptr<Condition> condition);
 
-    void update_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                         std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
-                         const std::vector<Value> &values);
-
-    void delete_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                         std::unique_ptr<Condition> condition);
-
-    std::vector<Row> select_elements(const std::optional<std::string> &db_name, const std::string &table_name,
-                                       std::unique_ptr<Condition> condition);
+    static std::vector<Row> select_elements(const std::string &db_name, const std::string &table_name,
+                                            std::unique_ptr<Condition> condition);
 };
 
 

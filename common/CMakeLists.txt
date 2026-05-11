@@ -5,6 +5,7 @@ add_library(
         src/slot.cpp
         src/table.cpp
         src/page_manager.cpp
+        src/conditions.cpp
         include/datatypes.h
         include/constants.h
         include/exceptions.h
@@ -19,5 +20,11 @@ target_link_libraries(
         common
         PUBLIC
         nlohmann_json::nlohmann_json
+        Boost::asio
+        Boost::uuid
+        Boost::process
+        spdlog::spdlog
+        wsock32
+        ws2_32
 )
 add_subdirectory(tests)

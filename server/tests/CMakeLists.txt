@@ -2,19 +2,9 @@
         test_lexer
         test_lexer.cpp
 )
-add_executable(
-        test_request_handler
-        test_request_handler.cpp
-)
 target_link_libraries(
         test_lexer
         PRIVATE
         server
         GTest::gtest_main
-)
-target_link_libraries(
-        test_request_handler
-        PRIVATE
-        server
-        gtest
 )

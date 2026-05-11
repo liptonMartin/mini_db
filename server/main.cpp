@@ -6,7 +6,9 @@
 #include <ws2tcpip.h>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <boost/uuid.hpp>
 
+#include "entrypoint.h"
 #include "exceptions.h"
 
 class ServerSocket {
@@ -115,7 +117,8 @@ public:
     void send_response_to_client(const std::string &response) {
         /* сначала отправляем длину ответа */
         const uint32_t length_data = response.size();
-        if (send(_client_socket, reinterpret_cast<const char *>(&length_data), sizeof(length_data) , 0) == SOCKET_ERROR) {
+        if (send(_client_socket, reinterpret_cast<const char *>(&length_data), sizeof(length_data), 0) ==
+            SOCKET_ERROR) {
             std::cout << "Send data to client failed!\n";
             shutdown();
             throw FailedSendDataException();
@@ -155,16 +158,32 @@ int main(int argc, char **argv) {
     ServerSocket server_socket(port);
     server_socket.start_listen_socket();
 
+    /* создаем балансировщик */
+    Entrypoint entrypoint{};
+
+    boost::uuids::random_generator generator{};
     std::string request;
     while (server_socket.get_client_request(request) != 0) {
         nlohmann::json response;
         if (request.empty()) {
             /* Bad request */
             response = {{"Message", "Bad request"}, {"Status", "400"}};
-        }
-        else {
-            // TODO: handle client request
-            response = nlohmann::json::parse(request);
+        } else {
+            /* добавляем задачу в очередь */
+            // TODO: decompose it to lexer and parser!
+            DropDatabaseCommand command{"vova_2"};
+            const auto task_id = generator();
+            Task task{
+                .task_uuid = task_id,
+                .command_type = CommandType::DropDatabase,
+                .command = std::make_unique<DropDatabaseCommand>(command)
+            };
+            entrypoint.post_task(std::move(task));
+
+            response["uuid"] = boost::uuids::to_string(task_id);
+
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            response = entrypoint.get_result_by_id(task_id);
         }
         server_socket.send_response_to_client(to_string(response));
     }
