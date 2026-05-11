@@ -51,6 +51,17 @@ File | Settings | Build, Execution, Deployment | CMake
 -DCMAKE_TOOLCHAIN_FILE=/путь/к/vcpkg/scripts/buildsystems/vcpkg.cmake
 ```
 
+### SSL
+
+Для запуска проекта придется также выпустить самоподписанный ssl сертификат для защищенного соединения между клиентом 
+и сервером. Это можно сделать с помощью утилиты `openssl`. Пример команды:
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout server.key -out server.crt
+```
+
+Здесь `-nodes`: не шифровать закрытый ключ (чтобы сервер запускался без пароля)
+
+
 ### Запуск проекта
 Для того чтобы запустить проект, необходимо стартовать два приложения main_server и main_client.
 > main_server нужно запускать перед main_client
@@ -77,7 +88,5 @@ File | Settings | Build, Execution, Deployment | CMake
 Для удобства в Clion это можно сделать так:
 Зайти в настройки конфигурации для main_client и main_server, в поле `Before launch` выбрать `Cmake target` и уже там
 выбрать main_storage_node. Тогда он будет собирать каждый раз новый main_storage_node.
-
-
 
 
