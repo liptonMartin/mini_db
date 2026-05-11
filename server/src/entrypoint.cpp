@@ -9,7 +9,8 @@
 #include "entrypoint.h"
 #include "exceptions.h"
 
-Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
+Entrypoint::Entrypoint(const int count_storage_nodes)
+    : _work_guard(boost::asio::make_work_guard(_io_context)), _acceptor(_io_context) {
     if (
         count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES
         || count_storage_nodes > entrypoint::MAX_COUNT_STORAGE_NODES) {
@@ -27,15 +28,12 @@ Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
 
     _logger->info("Starting acceptor");
 
-    _is_running = true;
     _worker_thread = std::thread([this, count_storage_nodes] {
         for (int i = 0; i < count_storage_nodes; i++) {
             add_storage_node();
         }
 
-        while (_is_running) {
-            _io_context.run_one();
-        }
+        _io_context.run();
     });
 }
 
@@ -193,7 +191,7 @@ void Entrypoint::post_task(Task &&task) {
     j["Message"] = "Not ready";
     _task_results[task.task_uuid] = j;
 
-    boost::asio::post(_io_context, [this, task = std::move(task)] mutable {
+    boost::asio::dispatch(_io_context, [this, task = std::move(task)] mutable {
         for (const auto &[socket, is_busy]: _storage_nodes_busy) {
             if (!is_busy) {
                 async_send_task(socket, std::move(task));
@@ -216,7 +214,7 @@ nlohmann::json Entrypoint::get_result_by_id(const boost::uuids::uuid &task_id) {
 }
 
 void Entrypoint::shutdown() {
-    _is_running = false;
+    _work_guard.reset();
 
     _io_context.stop();
 
