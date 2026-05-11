@@ -92,7 +92,6 @@ void ServerSocket::async_read_request(const ClientSession &session, const std::s
     if (*length_data == 0) {
         const nlohmann::json response = get_message_bad_request();
         async_send_response_client(session, response);
-        async_read_header(session);
         return;
     }
 
