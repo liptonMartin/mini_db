@@ -35,17 +35,18 @@ struct Task {
 };
 
 class Entrypoint {
-    bool _is_running = false;
+    std::mutex _task_results_mutex;
 
     boost::asio::io_context _io_context;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> _work_guard;
     boost::asio::ip::tcp::acceptor _acceptor;
-    std::map<asio_socket_ptr, bool> _storage_nodes_info; /* сокет:индикатор_занятости */
+    std::map<asio_socket_ptr, bool> _storage_nodes_busy; /* сокет:индикатор_занятости */
     std::map<asio_socket_ptr, boost_process_ptr> _storage_nodes_process; /* сокет:pid_процесса */
 
     std::thread _worker_thread;
 
     std::queue<Task> _task_queue;
-    std::unordered_map<boost::uuids::uuid, result> _results;
+    std::unordered_map<boost::uuids::uuid, result> _task_results;
 
     std::shared_ptr<spdlog::logger> _logger;
 
@@ -62,7 +63,7 @@ class Entrypoint {
 
     void async_read_response_body(const asio_socket_ptr &socket, uint32_t length_data, boost::uuids::uuid task_id);
 
-    void async_send_front_task(const asio_socket_ptr &socket);
+    void async_send_next_task(const asio_socket_ptr &socket);
 
     void async_send_task(const asio_socket_ptr &socket, Task &&task);
 
@@ -73,7 +74,7 @@ public:
 
     void post_task(Task &&task);
 
-    nlohmann::json get_result_by_id(boost::uuids::uuid task_id);
+    nlohmann::json get_result_by_id(const boost::uuids::uuid& task_id);
 
     ~Entrypoint();
 };

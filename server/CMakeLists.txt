@@ -4,10 +4,12 @@
         include/lexer.h
         include/command.h
         include/entrypoint.h
+        include/server_socket.h
         src/storage_engine.cpp
         src/lexer.cpp
         src/command.cpp
         src/entrypoint.cpp
+        src/server_socket.cpp
 )
 
 target_include_directories(
@@ -40,6 +42,3 @@ target_link_libraries(
         server
 )
 add_subdirectory(tests)
-
-find_package(pegtl CONFIG REQUIRED)
-

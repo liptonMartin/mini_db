@@ -9,13 +9,15 @@
 #include "entrypoint.h"
 #include "exceptions.h"
 
-Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
-    if (count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES || count_storage_nodes >
-        entrypoint::MAX_COUNT_STORAGE_NODES) {
+Entrypoint::Entrypoint(const int count_storage_nodes)
+    : _work_guard(boost::asio::make_work_guard(_io_context)), _acceptor(_io_context) {
+    if (
+        count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES
+        || count_storage_nodes > entrypoint::MAX_COUNT_STORAGE_NODES) {
         throw FailedStartEntrypointException();
     }
 
-    _logger = spdlog::stdout_color_mt("console");
+    _logger = spdlog::stdout_color_mt("entrypoint");
     _logger->info("Starting entrypoint");
 
     /* loopback = localhost */
@@ -27,14 +29,11 @@ Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
     _logger->info("Starting acceptor");
 
     _worker_thread = std::thread([this, count_storage_nodes] {
-        std::cout << "[Worker] Thread started, ID: " << std::this_thread::get_id() << std::flush;
         for (int i = 0; i < count_storage_nodes; i++) {
             add_storage_node();
         }
 
-        while (!_is_running) {
-            _io_context.run_one();
-        }
+        _io_context.run();
     });
 }
 
@@ -44,10 +43,7 @@ void Entrypoint::add_storage_node() {
         const auto child_process_ptr = std::make_shared<boost_process>(
             boost::process::v1::child("./main_storage_node.exe"));
 
-        // Даем процессу время на инициализацию
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        _logger->info("Staring new process with PID {}", child_process_ptr->id());
+        _logger->info("Starting new process with PID {}", child_process_ptr->id());
 
         start_accept(child_process_ptr);
     } catch (const std::system_error &e) {
@@ -56,7 +52,7 @@ void Entrypoint::add_storage_node() {
 }
 
 void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
-    if (_storage_nodes_info[socket] == true) {
+    if (_storage_nodes_busy[socket] == true) {
         _logger->error("try to remove busy storage node!");
         return;
     }
@@ -64,7 +60,11 @@ void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
     const auto child_process = _storage_nodes_process[socket];
 
     child_process->terminate();
-    child_process->detach();
+    child_process->wait();
+
+    /* удаляем из maps */
+    _storage_nodes_busy.erase(socket);
+    _storage_nodes_process.erase(socket);
 }
 
 
@@ -77,6 +77,7 @@ void Entrypoint::start_accept(const boost_process_ptr &child_process_ptr) {
         [this, client_socket, child_process_ptr](const boost::system::error_code &error) {
             if (error) {
                 _logger->error("Error accepting: {}", error.message());
+                return;
             }
 
             handle_new_connection(client_socket, child_process_ptr);
@@ -86,10 +87,10 @@ void Entrypoint::start_accept(const boost_process_ptr &child_process_ptr) {
 
 void Entrypoint::handle_new_connection(const asio_socket_ptr &socket, const boost_process_ptr &child_process_ptr) {
     /* добавляю в список сокетов */
-    _storage_nodes_info[socket] = false;
+    _storage_nodes_busy[socket] = false;
     _storage_nodes_process[socket] = child_process_ptr;
 
-    async_send_front_task(socket);
+    async_send_next_task(socket);
 }
 
 
@@ -128,20 +129,22 @@ void Entrypoint::async_read_response_body(const asio_socket_ptr &socket, const u
             const result response = nlohmann::json::parse(*buffer);
 
             /* добавляем в выполненную задачу */
-            _results[task_id] = response;
+            _task_results_mutex.lock();
+            _task_results[task_id] = response;
+            _task_results_mutex.unlock();
 
             /* добавляем новую задачу освободившемуся узлу */
-            async_send_front_task(socket);
+            async_send_next_task(socket);
         }
     );
 }
 
 void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
-    if (_storage_nodes_info[socket] == true) {
+    if (_storage_nodes_busy[socket] == true) {
         _logger->error("Try send new task busy storage node!");
     }
 
-    _storage_nodes_info[socket] = true;
+    _storage_nodes_busy[socket] = true;
     auto [task_id, command_type, abstract_command] = std::move(task);
 
     /* сначала отправляем тип команды */
@@ -160,10 +163,11 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
     boost::asio::async_write(
         *socket,
         boost::asio::buffer(buffer->data(), buffer->size()),
-        [this, socket, task_id](const boost::system::error_code &ec, size_t) {
+        // ReSharper disable once CppLambdaCaptureNeverUsed
+        [this, socket, task_id, buffer](const boost::system::error_code &ec, size_t) {
             if (ec) {
                 _logger->error("Error writing request: {}", ec.message());
-                async_send_front_task(socket);
+                async_send_next_task(socket);
                 return;
             }
 
@@ -172,9 +176,9 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
     );
 }
 
-void Entrypoint::async_send_front_task(const asio_socket_ptr &socket) {
+void Entrypoint::async_send_next_task(const asio_socket_ptr &socket) {
     if (_task_queue.empty()) {
-        _storage_nodes_info[socket] = false; /* storage node свободен */
+        _storage_nodes_busy[socket] = false; /* storage node свободен */
         return;
     }
     auto task = std::move(_task_queue.front());
@@ -186,10 +190,10 @@ void Entrypoint::post_task(Task &&task) {
     nlohmann::json j;
     j["Status"] = 200;
     j["Message"] = "Not ready";
-    _results[task.task_uuid] = j;
+    _task_results[task.task_uuid] = j;
 
-    boost::asio::post(_io_context, [this, task = std::move(task)] mutable {
-        for (const auto &[socket, is_busy]: _storage_nodes_info) {
+    boost::asio::dispatch(_io_context, [this, task = std::move(task)] mutable {
+        for (const auto &[socket, is_busy]: _storage_nodes_busy) {
             if (!is_busy) {
                 async_send_task(socket, std::move(task));
                 return;
@@ -199,18 +203,19 @@ void Entrypoint::post_task(Task &&task) {
     });
 }
 
-nlohmann::json Entrypoint::get_result_by_id(boost::uuids::uuid task_id) {
-    if (!_results.contains(task_id)) {
+nlohmann::json Entrypoint::get_result_by_id(const boost::uuids::uuid &task_id) {
+    std::lock_guard lock(_task_results_mutex);
+    if (!_task_results.contains(task_id)) {
         nlohmann::json response;
         response["Status"] = 404;
         response["Message"] = "Task not found";
         return response;
     }
-    return _results[task_id];
+    return _task_results[task_id];
 }
 
 void Entrypoint::shutdown() {
-    _is_running = false;
+    _work_guard.reset();
 
     _io_context.stop();
 
