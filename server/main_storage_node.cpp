@@ -69,7 +69,7 @@ class StorageNode {
         boost::asio::async_read(
             _server_socket,
             boost::asio::buffer(buffer->data(), length_data),
-            [this, command_type, buffer](const boost::system::error_code &ec, std::size_t length) {
+            [this, command_type, buffer](const boost::system::error_code &ec, std::size_t) {
                 if (ec) {
                     if (ec == boost::asio::error::eof) {
                         _logger->info("Connection closed by peer");
@@ -125,6 +125,7 @@ class StorageNode {
             response["Status"] = 500;
             response["Message"] = "USE command should be handle on ClientSession, not Storage engine!";
         }
+        _logger->info("Task successfully processed");
         async_send_response_to_server(response);
     }
 

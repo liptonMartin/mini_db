@@ -84,7 +84,7 @@ void ServerSocket::async_read_header(const ClientSession &session) {
 
 void ServerSocket::async_read_request(const ClientSession &session, const std::shared_ptr<uint32_t> &length_data) {
     _logger->info(
-        "Starting listing request from client: {}:{}",
+        "Starting read request from client: {}:{}",
         session.client_socket->remote_endpoint().address().to_string(),
         session.client_socket->remote_endpoint().port()
     );
@@ -101,8 +101,8 @@ void ServerSocket::async_read_request(const ClientSession &session, const std::s
 
     boost::asio::async_read(
         *session.client_socket,
-        boost::asio::buffer(buffer.get(), sizeof(*buffer)),
-        [this, session, buffer](const boost::system::error_code &ec, std::size_t length) {
+        boost::asio::buffer(buffer->data(), buffer->size()),
+        [this, session, buffer](const boost::system::error_code &ec, std::size_t) {
             if (ec) {
                 if (ec == boost::asio::error::eof) {
                     _logger->info("Client disconnected");
@@ -179,18 +179,21 @@ void ServerSocket::async_send_response_client(const ClientSession &session, cons
         session.client_socket->remote_endpoint().port()
     );
 
-    const auto buffer = std::make_shared<std::string>();
-    const auto raw_response = nlohmann::to_string(response);
+    const auto raw_response = response.dump();
     const uint32_t length_data = raw_response.size();
-    buffer->resize(length_data + sizeof(length_data));
+
+    const auto buffer = std::make_shared<std::vector<uint8_t> >();
+    buffer->resize(sizeof(length_data) + length_data);
+    memcpy(buffer->data(), &length_data, sizeof(length_data));
+    memcpy(buffer->data() + sizeof(length_data), raw_response.data(), raw_response.size());
 
     boost::asio::async_write(
         *session.client_socket,
-        boost::asio::buffer(buffer.get(), sizeof(*buffer)),
+        boost::asio::buffer(buffer->data(), length_data + sizeof(length_data)),
         [this, session](const boost::system::error_code &ec, std::size_t) {
             if (ec) {
                 _logger->error("Error writing response: {}", ec.message());
-                /* Даже если ошибка, то начинаем снова слушать ? */
+                /* Даже если ошибка, то начинаем снова слушать? */
             }
             async_read_header(session);
         }

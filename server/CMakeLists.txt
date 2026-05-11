@@ -42,6 +42,3 @@ target_link_libraries(
         server
 )
 add_subdirectory(tests)
-
-find_package(pegtl CONFIG REQUIRED)
-

@@ -14,6 +14,7 @@ endif()
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 
 find_package(nlohmann_json REQUIRED)
+find_package(pegtl CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS asio uuid process)
 find_package(spdlog REQUIRED)
 
