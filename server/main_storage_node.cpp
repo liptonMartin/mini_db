@@ -174,7 +174,11 @@ public:
     ~StorageNode() {
         _io_context.stop();
 
-        _server_socket.close();
+        boost::system::error_code ec;
+        _server_socket.close(ec);
+        if (ec) {
+            _logger->error("Error while closing socket: {}", ec.message());
+        }
     }
 };
 
