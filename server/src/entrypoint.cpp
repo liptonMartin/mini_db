@@ -78,6 +78,7 @@ void Entrypoint::start_accept(const boost_process_ptr &child_process_ptr) {
         [this, client_socket, child_process_ptr](const boost::system::error_code &error) {
             if (error) {
                 _logger->error("Error accepting: {}", error.message());
+                return;
             }
 
             handle_new_connection(client_socket, child_process_ptr);
@@ -203,7 +204,7 @@ void Entrypoint::post_task(Task &&task) {
     });
 }
 
-nlohmann::json Entrypoint::get_result_by_id(const boost::uuids::uuid& task_id) {
+nlohmann::json Entrypoint::get_result_by_id(const boost::uuids::uuid &task_id) {
     std::lock_guard lock(_task_results_mutex);
     if (!_task_results.contains(task_id)) {
         nlohmann::json response;
