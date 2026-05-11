@@ -166,7 +166,7 @@ std::vector<std::string> Database::get_tables() {
 std::filesystem::path Database::make_path_to_file(const std::string &db_name) {
     const std::filesystem::path exe_path = std::filesystem::current_path();
     // Поднимаемся на 2 уровня выше: из build/bin/ -> в корень проекта
-    const std::filesystem::path project_root = exe_path.parent_path().parent_path().parent_path(); // от build/
+    const std::filesystem::path project_root = exe_path.parent_path().parent_path(); // от build/
     std::filesystem::path db_dir = project_root / "databases" / db_name;
     return db_dir;
 }

@@ -1,13 +1,13 @@
 ﻿add_library(
         server
         include/storage_engine.h
-        include/request_handler.h
         include/lexer.h
         include/command.h
+        include/entrypoint.h
         src/storage_engine.cpp
-        src/request_handler.cpp
         src/lexer.cpp
         src/command.cpp
+        src/entrypoint.cpp
 )
 
 target_include_directories(
@@ -26,12 +26,18 @@ target_link_libraries(
 add_executable(
         main_server main.cpp
 )
+add_executable(
+        main_storage_node main_storage_node.cpp
+)
 target_link_libraries(
         main_server
         PUBLIC
         server
-        wsock32
-        ws2_32
+)
+target_link_libraries(
+        main_storage_node
+        PUBLIC
+        server
 )
 add_subdirectory(tests)
 

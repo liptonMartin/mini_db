@@ -28,6 +28,26 @@ bool Column::operator==(const Column &column) const {
     return _name == column._name;
 }
 
+nlohmann::json Column::to_json() const {
+    nlohmann::json j;
+    j["column_id"] = _column_id;
+    j["name"] = _name;
+    j["type"] = _type;
+    j["is_nullable"] = _is_nullable;
+    j["is_indexed"] = _is_indexed;
+    return j;
+}
+
+// Статический метод десериализации
+Column Column::from_json(const nlohmann::json& j) {
+    return Column {
+        j.at("column_id").get<ptrdiff_t>(),
+        j.at("name").get<std::string>(),
+        static_cast<DataType>(j.at("type").get<int>()),
+        j.at("is_nullable").get<bool>(),
+        j.at("is_indexed").get<bool>()
+    };
+}
 /**
  *
  * @param path Путь, где хранится бд: root/databases/{database_name}/

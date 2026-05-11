@@ -9,4 +9,12 @@ namespace db {
     inline constexpr size_t PAGE_SIZE = 4096;
 }
 
+namespace entrypoint {
+    inline constexpr int MIN_COUNT_STORAGE_NODES = 1;
+    inline constexpr int MAX_COUNT_STORAGE_NODES = 8;
+
+    inline constexpr int COUNT_THREADS = 2;
+    inline constexpr int SERVER_PORT = 1235;
+}
+
 #endif //MINIDB_CONSTANTS_H

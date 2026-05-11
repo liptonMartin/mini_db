@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "dependencies": [
     "nlohmann-json",
-    "pegtl"
+    "pegtl",
+    "boost-asio",
+    "boost-uuid",
+    "boost-process",
+    "spdlog"
   ]
 }
