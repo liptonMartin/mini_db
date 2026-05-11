@@ -4,10 +4,12 @@
         include/lexer.h
         include/command.h
         include/entrypoint.h
+        include/server_socket.h
         src/storage_engine.cpp
         src/lexer.cpp
         src/command.cpp
         src/entrypoint.cpp
+        src/server_socket.cpp
 )
 
 target_include_directories(
