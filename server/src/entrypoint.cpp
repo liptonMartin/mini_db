@@ -161,7 +161,8 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
     boost::asio::async_write(
         *socket,
         boost::asio::buffer(buffer->data(), buffer->size()),
-        [this, socket, task_id](const boost::system::error_code &ec, size_t) {
+        // ReSharper disable once CppLambdaCaptureNeverUsed
+        [this, socket, task_id, buffer](const boost::system::error_code &ec, size_t) {
             if (ec) {
                 _logger->error("Error writing request: {}", ec.message());
                 async_send_front_task(socket);

@@ -190,7 +190,8 @@ void ServerSocket::async_send_response_client(const ClientSession &session, cons
     boost::asio::async_write(
         *session.client_socket,
         boost::asio::buffer(buffer->data(), length_data + sizeof(length_data)),
-        [this, session](const boost::system::error_code &ec, std::size_t) {
+        // ReSharper disable once CppLambdaCaptureNeverUsed
+        [this, session, buffer](const boost::system::error_code &ec, std::size_t) {
             if (ec) {
                 _logger->error("Error writing response: {}", ec.message());
                 /* Даже если ошибка, то начинаем снова слушать? */

@@ -142,7 +142,8 @@ class StorageNode {
         boost::asio::async_write(
             _server_socket,
             boost::asio::buffer(buffer->data(), sizeof(length_data) + length_data),
-            [this](const boost::system::error_code &ec, std::size_t length) {
+            // ReSharper disable once CppLambdaCaptureNeverUsed
+            [this, buffer](const boost::system::error_code &ec, std::size_t length) {
                 if (ec) {
                     _logger->error("Error while writing to server {}", ec.message());
                 }
