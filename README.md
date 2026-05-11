@@ -40,7 +40,7 @@ cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=/путь/к/vcpkg/scripts/buildsyste
 cmake --build build
 ```
 
-Для удобства запуска можно использовать IDE.
+Для удобства сборки можно использовать IDE.
 
 #### Clion
 
@@ -62,6 +62,12 @@ File | Settings | Build, Execution, Deployment | CMake
 ./main_server.exe 1234
 ./main_client.exe 1234
 ```
+
+#### Clion
+Для удобства запуска через IDE можно в настройках конфигурации пробросить аргументы командной строки:
+В настройках конфигурации для main_server и main_client в поле `Program arguments` добавить номер порта (например 1234)
+
+---
 
 Под капотом main_server запускает entrypoint, который в свою очередь плодит множество процессов (main_storage_node).
 При разработке требуется пересобирать не только main_server и main_client, но и main_storage_node, ведь автоматически 
