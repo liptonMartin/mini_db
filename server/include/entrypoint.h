@@ -37,15 +37,17 @@ struct Task {
 class Entrypoint {
     bool _is_running = false;
 
+    std::mutex _task_results_mutex;
+
     boost::asio::io_context _io_context;
     boost::asio::ip::tcp::acceptor _acceptor;
-    std::map<asio_socket_ptr, bool> _storage_nodes_info; /* сокет:индикатор_занятости */
+    std::map<asio_socket_ptr, bool> _storage_nodes_busy; /* сокет:индикатор_занятости */
     std::map<asio_socket_ptr, boost_process_ptr> _storage_nodes_process; /* сокет:pid_процесса */
 
     std::thread _worker_thread;
 
     std::queue<Task> _task_queue;
-    std::unordered_map<boost::uuids::uuid, result> _results;
+    std::unordered_map<boost::uuids::uuid, result> _task_results;
 
     std::shared_ptr<spdlog::logger> _logger;
 
@@ -73,7 +75,7 @@ public:
 
     void post_task(Task &&task);
 
-    nlohmann::json get_result_by_id(boost::uuids::uuid task_id);
+    nlohmann::json get_result_by_id(const boost::uuids::uuid& task_id);
 
     ~Entrypoint();
 };
