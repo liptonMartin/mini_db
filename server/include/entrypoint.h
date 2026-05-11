@@ -63,7 +63,7 @@ class Entrypoint {
 
     void async_read_response_body(const asio_socket_ptr &socket, uint32_t length_data, boost::uuids::uuid task_id);
 
-    void async_send_front_task(const asio_socket_ptr &socket);
+    void async_send_next_task(const asio_socket_ptr &socket);
 
     void async_send_task(const asio_socket_ptr &socket, Task &&task);
 

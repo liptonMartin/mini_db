@@ -43,9 +43,6 @@ void Entrypoint::add_storage_node() {
         const auto child_process_ptr = std::make_shared<boost_process>(
             boost::process::v1::child("./main_storage_node.exe"));
 
-        // Даем процессу время на инициализацию
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
         _logger->info("Starting new process with PID {}", child_process_ptr->id());
 
         start_accept(child_process_ptr);
@@ -64,6 +61,10 @@ void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
 
     child_process->terminate();
     child_process->wait();
+
+    /* удаляем из maps */
+    _storage_nodes_busy.erase(socket);
+    _storage_nodes_process.erase(socket);
 }
 
 
@@ -89,7 +90,7 @@ void Entrypoint::handle_new_connection(const asio_socket_ptr &socket, const boos
     _storage_nodes_busy[socket] = false;
     _storage_nodes_process[socket] = child_process_ptr;
 
-    async_send_front_task(socket);
+    async_send_next_task(socket);
 }
 
 
@@ -133,7 +134,7 @@ void Entrypoint::async_read_response_body(const asio_socket_ptr &socket, const u
             _task_results_mutex.unlock();
 
             /* добавляем новую задачу освободившемуся узлу */
-            async_send_front_task(socket);
+            async_send_next_task(socket);
         }
     );
 }
@@ -166,7 +167,7 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
         [this, socket, task_id, buffer](const boost::system::error_code &ec, size_t) {
             if (ec) {
                 _logger->error("Error writing request: {}", ec.message());
-                async_send_front_task(socket);
+                async_send_next_task(socket);
                 return;
             }
 
@@ -175,7 +176,7 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
     );
 }
 
-void Entrypoint::async_send_front_task(const asio_socket_ptr &socket) {
+void Entrypoint::async_send_next_task(const asio_socket_ptr &socket) {
     if (_task_queue.empty()) {
         _storage_nodes_busy[socket] = false; /* storage node свободен */
         return;
