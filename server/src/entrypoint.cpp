@@ -10,12 +10,13 @@
 #include "exceptions.h"
 
 Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
-    if (count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES || count_storage_nodes >
-        entrypoint::MAX_COUNT_STORAGE_NODES) {
+`    if (
+        count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES
+        || count_storage_nodes > entrypoint::MAX_COUNT_STORAGE_NODES) {
         throw FailedStartEntrypointException();
     }
 
-    _logger = spdlog::stdout_color_mt("console");
+    _logger = spdlog::stdout_color_mt("entrypoint");
     _logger->info("Starting entrypoint");
 
     /* loopback = localhost */
@@ -26,13 +27,13 @@ Entrypoint::Entrypoint(const int count_storage_nodes) : _acceptor(_io_context) {
 
     _logger->info("Starting acceptor");
 
+    _is_running = true;
     _worker_thread = std::thread([this, count_storage_nodes] {
-        std::cout << "[Worker] Thread started, ID: " << std::this_thread::get_id() << std::flush;
         for (int i = 0; i < count_storage_nodes; i++) {
             add_storage_node();
         }
 
-        while (!_is_running) {
+        while (_is_running) {
             _io_context.run_one();
         }
     });
@@ -47,7 +48,7 @@ void Entrypoint::add_storage_node() {
         // Даем процессу время на инициализацию
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        _logger->info("Staring new process with PID {}", child_process_ptr->id());
+        _logger->info("Starting new process with PID {}", child_process_ptr->id());
 
         start_accept(child_process_ptr);
     } catch (const std::system_error &e) {
@@ -64,7 +65,7 @@ void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
     const auto child_process = _storage_nodes_process[socket];
 
     child_process->terminate();
-    child_process->detach();
+    child_process->wait();
 }
 
 
