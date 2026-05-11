@@ -40,7 +40,7 @@ Entrypoint::Entrypoint(const int count_storage_nodes)
 void Entrypoint::add_storage_node() {
     /* создаем новый процесс, который теперь пытается подключиться к нашему listen_socket */
     try {
-        const auto child_process_ptr = std::make_shared<boost_process>(
+        const auto child_process_ptr = std::make_shared<BoostProcess>(
             boost::process::v1::child("./main_storage_node.exe"));
 
         _logger->info("Starting new process with PID {}", child_process_ptr->id());
@@ -51,7 +51,7 @@ void Entrypoint::add_storage_node() {
     }
 }
 
-void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
+void Entrypoint::remove_storage_node(const AsioSocketPtr &socket) {
     if (_storage_nodes_busy[socket] == true) {
         _logger->error("try to remove busy storage node!");
         return;
@@ -68,9 +68,9 @@ void Entrypoint::remove_storage_node(const asio_socket_ptr &socket) {
 }
 
 
-void Entrypoint::start_accept(const boost_process_ptr &child_process_ptr) {
+void Entrypoint::start_accept(const BoostProcessPtr &child_process_ptr) {
     /* создаю новый сокет для будущего storage node */
-    auto client_socket = std::make_shared<asio_socket>(_io_context);
+    auto client_socket = std::make_shared<AsioSocket>(_io_context);
 
     _acceptor.async_accept(
         *client_socket,
@@ -85,7 +85,7 @@ void Entrypoint::start_accept(const boost_process_ptr &child_process_ptr) {
     );
 }
 
-void Entrypoint::handle_new_connection(const asio_socket_ptr &socket, const boost_process_ptr &child_process_ptr) {
+void Entrypoint::handle_new_connection(const AsioSocketPtr &socket, const BoostProcessPtr &child_process_ptr) {
     /* добавляю в список сокетов */
     _storage_nodes_busy[socket] = false;
     _storage_nodes_process[socket] = child_process_ptr;
@@ -94,7 +94,7 @@ void Entrypoint::handle_new_connection(const asio_socket_ptr &socket, const boos
 }
 
 
-void Entrypoint::async_read_response_header(const asio_socket_ptr &socket, boost::uuids::uuid task_id) {
+void Entrypoint::async_read_response_header(const AsioSocketPtr &socket, boost::uuids::uuid task_id) {
     auto length_data = std::make_shared<uint32_t>();
 
     boost::asio::async_read(
@@ -112,7 +112,7 @@ void Entrypoint::async_read_response_header(const asio_socket_ptr &socket, boost
 }
 
 
-void Entrypoint::async_read_response_body(const asio_socket_ptr &socket, const uint32_t length_data,
+void Entrypoint::async_read_response_body(const AsioSocketPtr &socket, const uint32_t length_data,
                                           boost::uuids::uuid task_id) {
     auto buffer = std::make_shared<std::vector<uint8_t> >();
     buffer->resize(length_data);
@@ -126,7 +126,7 @@ void Entrypoint::async_read_response_body(const asio_socket_ptr &socket, const u
                 return;
             }
             /* десериализуем данные */
-            const result response = nlohmann::json::parse(*buffer);
+            const Result response = nlohmann::json::parse(*buffer);
 
             /* добавляем в выполненную задачу */
             _task_results_mutex.lock();
@@ -139,7 +139,7 @@ void Entrypoint::async_read_response_body(const asio_socket_ptr &socket, const u
     );
 }
 
-void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
+void Entrypoint::async_send_task(const AsioSocketPtr &socket, Task &&task) {
     if (_storage_nodes_busy[socket] == true) {
         _logger->error("Try send new task busy storage node!");
     }
@@ -176,7 +176,7 @@ void Entrypoint::async_send_task(const asio_socket_ptr &socket, Task &&task) {
     );
 }
 
-void Entrypoint::async_send_next_task(const asio_socket_ptr &socket) {
+void Entrypoint::async_send_next_task(const AsioSocketPtr &socket) {
     if (_task_queue.empty()) {
         _storage_nodes_busy[socket] = false; /* storage node свободен */
         return;
