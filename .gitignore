@@ -72,3 +72,6 @@ Testing/
 # database
 databases
 .idea
+
+# certs
+certs

@@ -24,7 +24,7 @@ target_link_libraries(
         Boost::uuid
         Boost::process
         spdlog::spdlog
-        wsock32
-        ws2_32
+        OpenSSL::SSL
+        OpenSSL::Crypto
 )
 add_subdirectory(tests)
