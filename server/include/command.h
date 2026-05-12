@@ -160,7 +160,7 @@ class InsertIntoCommand : public Command {
     std::string _database_name;
     std::string _table_name;
 
-    std::vector<Column> _columns;
+    std::vector<std::string> _column_names;
     std::vector<Value> _values;
 
 protected:
@@ -170,7 +170,7 @@ protected:
     bool set_database_name(const std::string& db_name) override;
 
 public:
-    explicit InsertIntoCommand(const std::string &table_name, const std::vector<Column> &columns,
+    explicit InsertIntoCommand(const std::string &table_name, const std::vector<std::string> &column_names,
                                const std::vector<Value> &values, const std::string &database_name = "");
 
     nlohmann::json process_command() override;
@@ -187,7 +187,7 @@ class UpdateCommand : public Command {
 
     std::unique_ptr<Condition> _condition;
 
-    std::vector<Column> _columns;
+    std::vector<std::string> _column_names;
     std::vector<Value> _values;
 
 protected:
@@ -198,7 +198,7 @@ protected:
 
 public:
     explicit UpdateCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
-                           const std::vector<Column> &columns, const std::vector<Value> &values,
+                           const std::vector<std::string> &column_names, const std::vector<Value> &values,
                            const std::string &database_name = "");
 
     nlohmann::json process_command() override;
@@ -237,7 +237,7 @@ class SelectCommand : public Command {
     std::string _database_name;
     std::string _table_name;
 
-    std::optional<std::vector<Column> > _columns;
+    std::optional<std::vector<std::string> > _column_names;
     std::optional<std::vector<std::string> > _aliases;
 
     std::unique_ptr<Condition> _condition;
@@ -252,11 +252,11 @@ public:
     SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
                   const std::string &database_name = "");
 
-    SelectCommand(const std::string &table_name, const std::vector<Column> &columns,
+    SelectCommand(const std::string &table_name, const std::vector<std::string> &column_names,
                   std::unique_ptr<Condition> condition,
                   const std::string &database_name = "");
 
-    SelectCommand(const std::string &table_name, const std::vector<Column> &columns,
+    SelectCommand(const std::string &table_name, const std::vector<std::string> &column_names,
                   const std::vector<std::string> &aliases, std::unique_ptr<Condition> condition,
                   const std::string &database_name = "");
 

@@ -24,17 +24,19 @@ public:
     static void drop_table(const std::string &db_name, const std::string &table_name);
 
     static void insert_elements(const std::string &db_name, const std::string &table_name,
-                                const std::vector<Column> &columns,
+                                const std::vector<std::string> &column_names,
                                 const std::vector<Value> &values);
 
     static void update_elements(const std::string &db_name, const std::string &table_name,
-                                std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+                                std::unique_ptr<Condition> condition, const std::vector<std::string> &column_names,
                                 const std::vector<Value> &values);
 
     static void delete_elements(const std::string &db_name, const std::string &table_name,
                                 std::unique_ptr<Condition> condition);
 
     static std::vector<Row> select_elements(const std::string &db_name, const std::string &table_name,
+                                            const std::vector<std::string> &column_names,
+                                            const std::vector<std::string> &aliases,
                                             std::unique_ptr<Condition> condition);
 };
 

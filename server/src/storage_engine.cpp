@@ -2,7 +2,6 @@
 // Created by rvova on 25.04.2026.
 //
 #include "storage_engine.h"
-#include "exceptions.h"
 
 void StorageEngine::create_table(const std::string &db_name, const std::string &table_name,
                                  const std::vector<Column> &columns) {
@@ -25,16 +24,20 @@ void StorageEngine::drop_database(const std::string &db_name) {
 }
 
 void StorageEngine::insert_elements(const std::string &db_name, const std::string &table_name,
-                                    const std::vector<Column> &columns,
+                                    const std::vector<std::string> &column_names,
                                     const std::vector<Value> &values) {
     auto db = Database::load_database(db_name);
+    // TODO: impl it!
+    std::vector<Column> columns{};
     db.insert_elements(table_name, columns, values);
 }
 
 void StorageEngine::update_elements(const std::string &db_name, const std::string &table_name,
-                                    std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+                                    std::unique_ptr<Condition> condition, const std::vector<std::string> &column_names,
                                     const std::vector<Value> &values) {
     auto db = Database::load_database(db_name);
+    // TODO: impl it!
+    std::vector<Column> columns{};
     db.update_elements(table_name, std::move(condition), columns, values);
 }
 
@@ -46,7 +49,10 @@ void StorageEngine::delete_elements(const std::string &db_name, const std::strin
 
 std::vector<Row> StorageEngine::select_elements(const std::string &db_name,
                                                 const std::string &table_name,
+                                                const std::vector<std::string> &column_names,
+                                                const std::vector<std::string> &aliases,
                                                 std::unique_ptr<Condition> condition) {
     auto db = Database::load_database(db_name);
+    // TODO: impl columns and aliases on database level!
     return db.select_elements(table_name, std::move(condition));
 }
