@@ -56,7 +56,7 @@ File | Settings | Build, Execution, Deployment | CMake
 Для запуска проекта придется также выпустить самоподписанный ssl сертификат для защищенного соединения между клиентом 
 и сервером. Это можно сделать с помощью утилиты `openssl`. Пример команды:
 ```bash
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout server.key -out server.crt
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout certs/server.key -out certs/server.crt
 ```
 
 Здесь `-nodes`: не шифровать закрытый ключ (чтобы сервер запускался без пароля)

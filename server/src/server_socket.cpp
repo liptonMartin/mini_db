@@ -19,8 +19,9 @@ ServerSocket::ServerSocket(Entrypoint &entrypoint, BoostGenerator &generator, co
         boost::asio::ssl::context::single_dh_use
 
     );
-    _ssl_context.use_certificate_chain_file("../../server.crt");
-    _ssl_context.use_private_key_file("../../server.key", boost::asio::ssl::context::pem);
+    // TODO: по хорошему надо как переменные окружения пробрасывать путь до сертов
+    _ssl_context.use_certificate_chain_file("../../certs/server.crt");
+    _ssl_context.use_private_key_file("../../certs/server.key", boost::asio::ssl::context::pem);
 
     /* loopback = localhost */
     _logger->info("Starting acceptor...");

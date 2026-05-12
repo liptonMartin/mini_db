@@ -10,7 +10,8 @@ ClientSocket::ClientSocket() : _ssl_context(boost::asio::ssl::context::tlsv12) {
     _logger = spdlog::stdout_color_mt("client");
 
     /* настройка ssl */
-    _ssl_context.load_verify_file("../../server.crt");
+    // TODO: по хорошему надо как переменные окружения пробрасывать путь до сертов
+    _ssl_context.load_verify_file("../../certs/server.crt");
 
     /* режим: проверять удаленный узел */
     _ssl_context.set_verify_mode(boost::asio::ssl::context::verify_peer);
