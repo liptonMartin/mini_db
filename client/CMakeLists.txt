@@ -1,10 +1,24 @@
-﻿add_executable(
+﻿add_library(
+        client
+        include/client_socket.h
+        src/client_socket.cpp
+)
+target_link_libraries(
+        client
+        PUBLIC
+        common
+)
+target_include_directories(
+        client
+        PUBLIC
+        include
+)
+add_executable(
         main_client
         main.cpp
 )
 target_link_libraries(
         main_client
         PUBLIC
-        common
-        nlohmann_json::nlohmann_json
+        client
 )
