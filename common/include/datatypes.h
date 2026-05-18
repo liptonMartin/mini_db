@@ -22,9 +22,11 @@ class Column;
 
 /* ========================================== ALIASES ========================================== */
 using Value = std::variant<int, std::string, Null>;
-using Row = std::map<Column, Value>;
+using Row = std::map<std::string, Value>; // map<column_name, value>
+using ColumnWithValue = std::map<Column, Value>;
+using Alias = std::optional<std::string>;
 
-inline nlohmann::json value_to_json(const Value& value) {
+inline nlohmann::json value_to_json(const Value &value) {
     nlohmann::json j;
 
     if (std::holds_alternative<int>(value)) {
@@ -41,14 +43,15 @@ inline nlohmann::json value_to_json(const Value& value) {
     return j;
 }
 
-inline Value value_from_json(const nlohmann::json& j) {
+inline Value value_from_json(const nlohmann::json &j) {
     std::string type = j.at("type");
 
     if (type == "int") {
         return j.at("value").get<int>();
     } else if (type == "string") {
         return j.at("value").get<std::string>();
-    } else { // null
+    } else {
+        // null
         return Null{};
     }
 }
@@ -167,8 +170,6 @@ public:
 
     void erase_element(ptrdiff_t slot_id);
 
-    void update_element(ptrdiff_t slot_id, const std::vector<char> &data);
-
     /**
      * @return Вектор из самих данных
      */
@@ -203,8 +204,6 @@ public:
     ptrdiff_t insert_element_into_page(ptrdiff_t page_id, const std::vector<char> &data) const;
 
     void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const;
-
-    void update_element_into_page(ptrdiff_t page_id, ptrdiff_t slot_id, const std::vector<char> &data) const;
 };
 
 enum class DataType { Int, String };
@@ -230,7 +229,8 @@ public:
     explicit Column(ptrdiff_t column_id, const std::string &name, DataType type, bool is_nullable, bool is_indexed);
 
     nlohmann::json to_json() const;
-    static Column from_json(const nlohmann::json& j);
+
+    static Column from_json(const nlohmann::json &j);
 };
 
 
@@ -246,10 +246,11 @@ enum class ComparisonDataType {
 
 class Condition {
 protected:
-    Column _column{};
+    std::string _column_name{};
 
 public:
-    explicit Condition(Column column) : _column(std::move(column)) {}
+    explicit Condition(const std::string &column_name) : _column_name(column_name) {
+    }
 
     virtual ~Condition() = default;
 
@@ -259,14 +260,15 @@ public:
     virtual nlohmann::json to_json() const = 0;
 
     // Статический метод для десериализации
-    static std::unique_ptr<Condition> from_json(const nlohmann::json& j);
+    static std::unique_ptr<Condition> from_json(const nlohmann::json &j);
 };
+
 class ComparisonCondition : public Condition {
     ComparisonDataType _comparison_type;
     Value _value;
 
 public:
-    ComparisonCondition(Column column, ComparisonDataType comparison_type, Value value);
+    ComparisonCondition(const std::string &column_name, ComparisonDataType comparison_type, Value value);
 
     bool evaluate(const Row &column_values) const override;
 
@@ -278,7 +280,7 @@ class BetweenCondition : public Condition {
     Value _end;
 
 public:
-    BetweenCondition(Column column, Value start, Value end);
+    BetweenCondition(const std::string &column_name, Value start, Value end);
 
     bool evaluate(const Row &column_values) const override;
 
@@ -289,7 +291,7 @@ class RegexCondition : public Condition {
     std::string _regex;
 
 public:
-    RegexCondition(Column column, std::string regex);
+    RegexCondition(const std::string &column_name, std::string regex);
 
     bool evaluate(const Row &column_values) const override;
 
@@ -317,11 +319,23 @@ class Table {
 
     ptrdiff_t get_pages_begin_offset();
 
-    Row get_empty_values();
+    std::vector<Column> get_columns_by_names(const std::vector<std::string> &column_names);
 
-    Row get_completed_values(const std::vector<Column> &columns, const std::vector<Value> &values);
+    static ColumnWithValue get_empty_values(const std::vector<Column> &columns);
+
+    static ColumnWithValue get_completed_values(const std::vector<Column> &columns, const std::vector<Value> &values);
+
+    static Row update_data_in_row(const Row &old_row, const Row &new_row);
 
     std::vector<char> get_bytes_from_row(const Row &column_values);
+
+    static Row get_row_from_column_with_value(const ColumnWithValue &column_with_values);
+
+    static Row get_row_with_aliases(const Row &row,
+                                    const std::vector<Column> &columns,
+                                    const std::unordered_map<std::string, Alias> &columns_with_aliases);
+
+    void fill_default_values(ColumnWithValue& column_with_value);
 
     explicit Table(const std::filesystem::path &path, const std::string &name,
                    const std::optional<std::vector<Column> > &columns, bool need_create);
@@ -334,23 +348,30 @@ public:
 
     static Table load_table(const std::filesystem::path &path, const std::string &name);
 
-    void insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values);
+    void insert_elements(const std::vector<std::string> &column_names, const std::vector<Value> &values);
 
-    void update_elements(std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+    void update_elements(const std::unique_ptr<Condition> &condition, const std::vector<std::string> &column_names,
                          const std::vector<Value> &values);
 
-    void delete_elements(std::unique_ptr<Condition> condition);
+    void delete_elements(const std::unique_ptr<Condition> &condition);
 
-    std::vector<Row> select_elements(std::unique_ptr<Condition> condition);
+    std::vector<Row> select_elements(const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
+                                     const std::unique_ptr<Condition> &condition);
 
     std::string get_name();
 
     std::vector<Column> get_columns();
 
+    std::vector<std::string> get_colum_names();
+
     ptrdiff_t get_count_pages();
 
-    static Row get_values_from_row(const std::vector<char> &data,
-                                   const std::vector<Column> &columns);
+    /**
+     * Получить все колонки из этой записи в таблице
+     * @param data Запись в виде байтов
+     * @return unordered_map<column_name, value>
+     */
+    ColumnWithValue get_full_column_with_value_from_bytes(const std::vector<char> &data);
 };
 
 /**
@@ -386,20 +407,24 @@ public:
 
     void drop_table(const std::string &name);
 
-    void insert_elements(const std::string &table_name, const std::vector<Column> &columns,
+    void insert_elements(const std::string &table_name, const std::vector<std::string> &column_names,
                          const std::vector<Value> &values);
 
     void update_elements(const std::string &table_name, std::unique_ptr<Condition> condition,
-                         const std::vector<Column> &columns,
+                         const std::vector<std::string> &column_names,
                          const std::vector<Value> &values);
 
     void delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
 
-    std::vector<Row> select_elements(const std::string &table_name, std::unique_ptr<Condition> condition);
+    std::vector<Row> select_elements(const std::string &table_name,
+                                     const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
+                                     std::unique_ptr<Condition> condition);
 
     std::string get_name();
 
     std::vector<std::string> get_tables();
+
+    std::vector<std::string> get_table_column_names(const std::string &table_name);
 };
 
 

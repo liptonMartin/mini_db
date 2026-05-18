@@ -34,10 +34,10 @@ public:
     static void delete_elements(const std::string &db_name, const std::string &table_name,
                                 std::unique_ptr<Condition> condition);
 
-    static std::vector<Row> select_elements(const std::string &db_name, const std::string &table_name,
-                                            const std::vector<std::string> &column_names,
-                                            const std::vector<std::string> &aliases,
-                                            std::unique_ptr<Condition> condition);
+    static nlohmann::json select_elements(
+        const std::string &db_name, const std::string &table_name,
+        const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
+        std::unique_ptr<Condition> condition);
 };
 
 

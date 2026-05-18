@@ -130,4 +130,18 @@ public:
     }
 };
 
+class ColumnNotFoundInTableException : public std::runtime_error {
+public:
+    explicit ColumnNotFoundInTableException(const std::string &column_name) : std::runtime_error(
+        "Column " + column_name + "not found!") {
+    }
+};
+
+class RedundantColumnException : public std::runtime_error {
+public:
+    explicit RedundantColumnException(const std::string &column_name) : std::runtime_error(
+        "Column" + column_name + "repeated") {
+    }
+};
+
 #endif //MINIDB_EXCEPTIONS_H

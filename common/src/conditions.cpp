@@ -8,41 +8,42 @@
 
 std::unique_ptr<Condition> Condition::from_json(const nlohmann::json &j) {
     const std::string type = j.at("type");
-    Column column = Column::from_json(j.at("column"));
+    const std::string column_name = j.at("column_name");
 
     if (type == "comparison") {
         const auto comp_type = static_cast<ComparisonDataType>(j.at("comparison_type").get<int>());
         Value value = value_from_json(j.at("value"));
-        return std::make_unique<ComparisonCondition>(std::move(column), comp_type, std::move(value));
+        return std::make_unique<ComparisonCondition>(column_name, comp_type, std::move(value));
     }
     if (type == "between") {
         auto start = value_from_json(j.at("start"));
         auto end = value_from_json(j.at("end"));
-        return std::make_unique<BetweenCondition>(std::move(column), std::move(start), std::move(end));
+        return std::make_unique<BetweenCondition>(column_name, std::move(start), std::move(end));
     }
     if (type == "regex") {
         std::string regex = j.at("regex");
-        return std::make_unique<RegexCondition>(std::move(column), std::move(regex));
+        return std::make_unique<RegexCondition>(column_name, std::move(regex));
     }
 
     throw std::runtime_error("Unknown condition type: " + type);
 }
 
-ComparisonCondition::ComparisonCondition(Column column, const ComparisonDataType comparison_type, Value value)
-    : Condition(std::move(column)), _comparison_type(comparison_type), _value(std::move(value)) {
+ComparisonCondition::ComparisonCondition(const std::string &column_name, const ComparisonDataType comparison_type,
+                                         Value value)
+    : Condition(column_name), _comparison_type(comparison_type), _value(std::move(value)) {
 }
 
 nlohmann::json ComparisonCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "comparison";
-    j["column"] = _column.to_json();
+    j["column"] = _column_name;
     j["comparison_type"] = _comparison_type;
     j["value"] = value_to_json(_value);
     return j;
 }
 
 bool ComparisonCondition::evaluate(const Row &column_values) const {
-    const auto it = column_values.find(_column);
+    const auto it = column_values.find(_column_name);
     if (it == column_values.end()) {
         throw std::runtime_error("Column not found in row");
     }
@@ -90,21 +91,21 @@ bool ComparisonCondition::evaluate(const Row &column_values) const {
     throw std::runtime_error("Unknown value type");
 }
 
-BetweenCondition::BetweenCondition(Column column, Value start, Value end)
-    : Condition(std::move(column)), _start(std::move(start)), _end(std::move(end)) {
+BetweenCondition::BetweenCondition(const std::string& column_name, Value start, Value end)
+    : Condition(column_name), _start(std::move(start)), _end(std::move(end)) {
 }
 
 nlohmann::json BetweenCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "between";
-    j["column"] = _column.to_json();
+    j["column"] = _column_name;
     j["start"] = value_to_json(_start);
     j["end"] = value_to_json(_end);
     return j;
 }
 
 bool BetweenCondition::evaluate(const Row &column_values) const {
-    const auto it = column_values.find(_column);
+    const auto it = column_values.find(_column_name);
     if (it == column_values.end()) {
         throw std::runtime_error("Column not found in row");
     }
@@ -137,21 +138,21 @@ bool BetweenCondition::evaluate(const Row &column_values) const {
     throw std::runtime_error("Unsupported type for BETWEEN");
 }
 
-RegexCondition::RegexCondition(Column column, std::string regex)
-    : Condition(std::move(column)), _regex(std::move(regex)) {
+RegexCondition::RegexCondition(const std::string& column_name, std::string regex)
+    : Condition(column_name), _regex(std::move(regex)) {
 }
 
 
 nlohmann::json RegexCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "regex";
-    j["column"] = _column.to_json();
+    j["column"] = _column_name;
     j["regex"] = _regex;
     return j;
 }
 
 bool RegexCondition::evaluate(const Row &column_values) const {
-    const auto it = column_values.find(_column);
+    const auto it = column_values.find(_column_name);
     if (it == column_values.end()) {
         throw std::runtime_error("Column not found in row");
     }

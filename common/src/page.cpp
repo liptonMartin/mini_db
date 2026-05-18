@@ -294,13 +294,6 @@ void Page::erase_element(ptrdiff_t slot_id) {
     }
 }
 
-void Page::update_element(ptrdiff_t slot_id, const std::vector<char> &data) {
-    const auto slot = get_slot(slot_id);
-    const auto slot_offset = slot.get_offset();
-
-    std::copy_n(data.begin(), data.size(), _data.begin() + slot_offset);
-}
-
 std::vector<char> Page::get_slot_data(const Slot &slot) {
     const auto size = slot.get_size();
     const auto offset = slot.get_offset();

@@ -53,8 +53,8 @@ Database Database::load_database(const std::string &name) {
 }
 
 void Database::drop_database() {
-    auto db_name = get_name();
-    auto path = make_path_to_file(db_name);
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
 
     if (!std::filesystem::exists(path)) {
         throw DatabaseDoesNotExistException(db_name);
@@ -100,22 +100,22 @@ void Database::drop_table(const std::string &name) {
     std::filesystem::remove(table_path);
 }
 
-void Database::insert_elements(const std::string &table_name, const std::vector<Column> &columns,
+void Database::insert_elements(const std::string &table_name, const std::vector<std::string> &column_names,
                                const std::vector<Value> &values) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    table.insert_elements(columns, values);
+    table.insert_elements(column_names, values);
 }
 
 void Database::update_elements(const std::string &table_name, std::unique_ptr<Condition> condition,
-                               const std::vector<Column> &columns, const std::vector<Value> &values) {
+                               const std::vector<std::string> &column_names, const std::vector<Value> &values) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    table.update_elements(std::move(condition), columns, values);
+    table.update_elements(std::move(condition), column_names, values);
 }
 
 void Database::delete_elements(const std::string &table_name, std::unique_ptr<Condition> condition) {
@@ -126,12 +126,15 @@ void Database::delete_elements(const std::string &table_name, std::unique_ptr<Co
     table.delete_elements(std::move(condition));
 }
 
-std::vector<Row> Database::select_elements(const std::string &table_name, std::unique_ptr<Condition> condition) {
+std::vector<Row> Database::select_elements(const std::string &table_name,
+                                           const std::optional<std::unordered_map<std::string, Alias> > &
+                                           columns_with_aliases,
+                                           std::unique_ptr<Condition> condition) {
     const auto db_name = get_name();
     const auto path = make_path_to_file(db_name);
     auto table = Table::load_table(path, table_name);
 
-    return table.select_elements(std::move(condition));
+    return table.select_elements(columns_with_aliases, std::move(condition));
 }
 
 std::string Database::get_name() {
@@ -163,13 +166,27 @@ std::vector<std::string> Database::get_tables() {
     return tables;
 }
 
+std::vector<std::string> Database::get_table_column_names(const std::string &table_name) {
+    const auto db_name = get_name();
+    const auto path = make_path_to_file(db_name);
+    auto table = Table::load_table(path, table_name);
+
+    return table.get_colum_names();
+}
+
 std::filesystem::path Database::make_path_to_file(const std::string &db_name) {
-    const std::filesystem::path exe_path = std::filesystem::current_path();
-    // Поднимаемся на 2 уровня выше: из build/bin/ -> в корень проекта
-    // TODO: по хорошему надо через переменные окружения пробросить где должны находиться файлы бд
-    const std::filesystem::path project_root = exe_path.parent_path().parent_path(); // от build/
-    std::filesystem::path db_dir = project_root / "databases" / db_name;
-    return db_dir;
+    size_t path_size = 0;
+    getenv_s(&path_size, nullptr, 0, "PATH_TO_DATABASES");
+    if (path_size == 0) {
+        /* используется значение по умолчанию */
+        const std::filesystem::path exe_path = std::filesystem::current_path();
+        return exe_path.parent_path().parent_path().parent_path() / "databases" / db_name;
+    }
+
+    std::vector<char> path(path_size);
+    getenv_s(&path_size, path.data(), path_size, "PATH_TO_DATABASES");
+
+    return std::filesystem::path(path.data()) / db_name;
 }
 
 /**

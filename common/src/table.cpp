@@ -39,8 +39,8 @@ nlohmann::json Column::to_json() const {
 }
 
 // Статический метод десериализации
-Column Column::from_json(const nlohmann::json& j) {
-    return Column {
+Column Column::from_json(const nlohmann::json &j) {
+    return Column{
         j.at("column_id").get<ptrdiff_t>(),
         j.at("name").get<std::string>(),
         static_cast<DataType>(j.at("type").get<int>()),
@@ -48,6 +48,7 @@ Column Column::from_json(const nlohmann::json& j) {
         j.at("is_indexed").get<bool>()
     };
 }
+
 /**
  *
  * @param path Путь, где хранится бд: root/databases/{database_name}/
@@ -125,15 +126,21 @@ Table Table::load_table(const std::filesystem::path &path, const std::string &na
     return Table(path, name, std::nullopt, false);
 }
 
-void Table::insert_elements(const std::vector<Column> &columns, const std::vector<Value> &values) {
-    if (columns.size() != values.size())
+void Table::insert_elements(const std::vector<std::string> &column_names, const std::vector<Value> &values) {
+    if (column_names.size() != values.size())
         throw FailedInsertElementsToTableException("Count columns not equal count values");
 
+    /* находим эти колонки */
+    const auto columns = get_columns_by_names(column_names);
+
     auto completed_values = get_completed_values(columns, values);
-    auto buffer = get_bytes_from_row(completed_values);
+
+    fill_default_values(completed_values); // бросит исключение, если дефолтного значения (или null) нет
+
+    const auto row = get_row_from_column_with_value(completed_values);
+    const auto buffer = get_bytes_from_row(row);
 
     const auto buffer_size = buffer.size();
-    buffer.resize(buffer_size);
     if (buffer_size + sizeof(PageHeader) + sizeof(Slot) > db::PAGE_SIZE)
         throw FailedInsertElementsToTableException("The data takes up too much memory!");
 
@@ -147,43 +154,64 @@ void Table::insert_elements(const std::vector<Column> &columns, const std::vecto
     page_manager.insert_element_into_page(page_id, buffer);
 }
 
-void Table::update_elements(std::unique_ptr<Condition> condition, const std::vector<Column> &columns,
+void Table::update_elements(const std::unique_ptr<Condition> &condition, const std::vector<std::string> &column_names,
                             const std::vector<Value> &values) {
     if (!condition)
         throw FailedUpdateElementsToTableException("The update elements requires a condition!");
 
-    if (columns.size() != values.size())
+    if (column_names.size() != values.size())
         throw FailedUpdateElementsToTableException("Count columns not equal count values");
+
+    const auto columns = get_columns_by_names(column_names);
 
     const auto completed_values = get_completed_values(columns, values);
 
     auto page_manager = PageManager(_file, get_pages_begin_offset());
     const auto count_pages = get_count_pages();
-    for (auto page_id = 0; page_id < count_pages; ++page_id) {
+    std::vector<std::vector<char>> elements_to_insert{};
+    for (ptrdiff_t page_id = 0; page_id < count_pages; ++page_id) {
         auto page = page_manager.read_page(page_id);
         for (auto slot_id = 0; slot_id < page.get_count_slots(); ++slot_id) {
             const auto slot = page.get_slot(slot_id);
             if (!slot.is_occupied()) continue;
 
-            const auto &slot_data = page.get_slot_data_by_id(slot_id);
-            const auto &row_data = get_values_from_row(slot_data, columns);
+            const auto slot_data = page.get_slot_data_by_id(slot_id);
+            const auto column_with_value_data = get_full_column_with_value_from_bytes(slot_data);
+
+            const auto row_data = get_row_from_column_with_value(column_with_value_data);
 
             if (condition->evaluate(row_data)) {
                 /* обновляем данные */
-                const auto &bytes = get_bytes_from_row(row_data);
-                page_manager.update_element_into_page(page_id, slot_id, bytes); /* перезапишет файл */
+                const auto new_row_data = get_row_from_column_with_value(completed_values);
+                const auto updated_row = update_data_in_row(row_data, new_row_data);
+
+                const auto bytes = get_bytes_from_row(updated_row);
+
+                /* удаляем элемент и запоминает его */
+                page_manager.erase_element_from_page(page_id, slot_id);
+                elements_to_insert.push_back(bytes);
             }
         }
     }
+
+    /* после того как все прочитали, можно записать этот буффер */
+    for (const auto& bytes : elements_to_insert ) {
+        auto page_id = page_manager.search_free_page(static_cast<ptrdiff_t>(bytes.size()));
+        if (page_id == -1) {
+            page_id = page_manager.allocate_page();
+            update_count_pages(get_count_pages() + 1);
+        }
+        // ReSharper disable once CppExpressionWithoutSideEffects
+        page_manager.insert_element_into_page(page_id, bytes);
+    }
 }
 
-void Table::delete_elements(std::unique_ptr<Condition> condition) {
+void Table::delete_elements(const std::unique_ptr<Condition> &condition) {
     if (!condition)
         throw FailedDeleteElementsToTableException("The delete elements requires a condition!");
 
     auto page_manager = PageManager(_file, get_pages_begin_offset());
     const auto count_pages = get_count_pages();
-    const auto &columns = get_columns();
     for (auto page_id = 0; page_id < count_pages; ++page_id) {
         auto page = page_manager.read_page(page_id);
         for (auto slot_id = 0; slot_id < page.get_count_slots(); ++slot_id) {
@@ -191,7 +219,8 @@ void Table::delete_elements(std::unique_ptr<Condition> condition) {
             if (!slot.is_occupied()) continue;
 
             const auto &slot_data = page.get_slot_data_by_id(slot_id);
-            const auto &row_data = get_values_from_row(slot_data, columns);
+            const auto &column_with_value_data = get_full_column_with_value_from_bytes(slot_data);
+            const auto &row_data = get_row_from_column_with_value(column_with_value_data);
 
             if (condition->evaluate(row_data)) {
                 /* удаляем данные */
@@ -201,17 +230,27 @@ void Table::delete_elements(std::unique_ptr<Condition> condition) {
     }
 }
 
-std::vector<Row> Table::select_elements(std::unique_ptr<Condition> condition) {
-    auto page_manager = PageManager(_file, get_pages_begin_offset());
-    const auto &columns = get_columns();
+std::vector<Row> Table::select_elements(
+    const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
+    const std::unique_ptr<Condition> &condition
+) {
+    const auto page_manager = PageManager(_file, get_pages_begin_offset());
     const auto count_pages = get_count_pages();
+    const auto columns = get_columns();
     std::vector<Row> rows{};
     for (auto page_id = 0; page_id < count_pages; ++page_id) {
         auto page = page_manager.read_page(page_id);
         for (const auto &slot_data: page.get_slots_data()) {
-            const auto &row_data = get_values_from_row(slot_data, columns);
+            const auto &column_with_value = get_full_column_with_value_from_bytes(slot_data);
+            auto row_data = get_row_from_column_with_value(column_with_value);
             if ((condition && condition->evaluate(row_data)) || !condition) {
                 /* если условия нет, то добавляем все элементы */
+
+                /* формируем запись уже вместе с alias */
+                if (columns_with_aliases.has_value()) {
+                    row_data = get_row_with_aliases(row_data, columns, columns_with_aliases.value());
+                }
+
                 rows.push_back(row_data);
             }
         }
@@ -220,12 +259,12 @@ std::vector<Row> Table::select_elements(std::unique_ptr<Condition> condition) {
     return rows;
 }
 
-Row Table::get_completed_values(const std::vector<Column> &columns,
-                                const std::vector<Value> &values) {
-    auto column_values = get_empty_values();
+ColumnWithValue Table::get_completed_values(const std::vector<Column> &columns,
+                                            const std::vector<Value> &values) {
+    auto column_values = get_empty_values(columns);
     for (auto i = 0; i < columns.size(); ++i) {
-        const auto column = columns[i];
-        const auto value = values[i];
+        const auto &column = columns[i];
+        const auto &value = values[i];
         column_values[column] = value;
     }
     for (const auto &item: column_values) {
@@ -256,13 +295,25 @@ Row Table::get_completed_values(const std::vector<Column> &columns,
     return column_values;
 }
 
+Row Table::update_data_in_row(const Row &old_row, const Row &new_row) {
+    Row result;
+    for (const auto &[column_name, value]: old_row) {
+        if (new_row.contains(column_name)) {
+            result[column_name] = new_row.at(column_name);
+        } else {
+            result[column_name] = value;
+        }
+    }
+    return result;
+}
+
 std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
     std::vector<char> buffer{};
     ptrdiff_t offset = 0;
 
     for (const auto &column: get_columns()) {
         /* для поддержки правильного порядка столбцов */
-        const auto &value = column_values.at(column);
+        const auto &value = column_values.at(column._name);
 
         if (column._is_nullable) {
             const auto is_null = std::holds_alternative<Null>(value);
@@ -291,6 +342,51 @@ std::vector<char> Table::get_bytes_from_row(const Row &column_values) {
         }
     }
     return buffer;
+}
+
+Row Table::get_row_from_column_with_value(const ColumnWithValue &column_with_values) {
+    Row result;
+    for (const auto &[column, value]: column_with_values) {
+        result[column._name] = value;
+    }
+    return result;
+}
+
+Row Table::get_row_with_aliases(const Row &row,
+                                const std::vector<Column> &columns,
+                                const std::unordered_map<std::string, Alias> &columns_with_aliases) {
+    Row result;
+    for (const auto &column: columns) {
+        if (columns_with_aliases.contains(column._name)) {
+            const auto& alias = columns_with_aliases.at(column._name);
+
+            const auto& value = row.at(column._name);
+
+            if (alias.has_value()) {
+                result[alias.value()] = value;
+            } else {
+                result[column._name] = value;
+            }
+        }
+    }
+    return result;
+}
+
+void Table::fill_default_values(ColumnWithValue &column_with_value) {
+    /* Заполнить null и дефолтными значениями */
+    for (const auto& column : get_columns()) {
+        try {
+            const auto& value = column_with_value.at(column);
+        } catch (std::out_of_range&) {
+            if (column._is_nullable) {
+                column_with_value[column] = Null{};
+                continue;
+            }
+            // TODO: if has_default_value ...
+            throw FailedInsertElementsToTableException("Column " + column._name + " doesn't support nullable value!");
+        }
+
+    }
 }
 
 std::string Table::get_name() {
@@ -343,6 +439,16 @@ std::vector<Column> Table::get_columns() {
     return columns;
 }
 
+std::vector<std::string> Table::get_colum_names() {
+    const auto columns = get_columns();
+    std::vector<std::string> column_names{};
+    for (const auto& column : columns) {
+        column_names.push_back(column._name);
+    }
+
+    return column_names;
+}
+
 ptrdiff_t Table::get_count_pages() {
     move_to_position_count_page();
 
@@ -351,9 +457,10 @@ ptrdiff_t Table::get_count_pages() {
     return count_pages;
 }
 
-Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<Column> &columns) {
-    Row result;
+ColumnWithValue Table::get_full_column_with_value_from_bytes(const std::vector<char> &data) {
+    ColumnWithValue result;
     ptrdiff_t offset = 0;
+    const auto columns = get_columns();
     for (const auto &column: columns) {
         Value value;
         /* если колонка может быть null, то перед каждым значением лежит bool значение, может ли быть null */
@@ -394,14 +501,41 @@ Row Table::get_values_from_row(const std::vector<char> &data, const std::vector<
     return result;
 }
 
-Row Table::get_empty_values() {
-    Row result;
-    for (const auto &column: get_columns()) {
+ColumnWithValue Table::get_empty_values(const std::vector<Column> &columns) {
+    ColumnWithValue result;
+    for (const auto &column: columns) {
         result[column] = Null{};
     }
     return result;
 }
 
+std::vector<Column> Table::get_columns_by_names(const std::vector<std::string> &column_names) {
+    const auto all_columns = get_columns();
+    std::vector<Column> result;
+
+    /* создаем unordered_map для быстрого доступа */
+    std::unordered_map<std::string, bool> unordered_map_column_names{};
+    for (const auto &column_name: column_names) {
+        if (unordered_map_column_names.contains(column_name)) {
+            throw RedundantColumnException(column_name);
+        }
+        unordered_map_column_names[column_name] = false;
+    }
+
+    for (const auto &column: all_columns) {
+        if (unordered_map_column_names.contains(column._name)) {
+            result.push_back(column);
+            unordered_map_column_names[column._name] = true;
+        }
+    }
+
+    for (const auto &column_name: column_names) {
+        if (!unordered_map_column_names[column_name]) {
+            throw ColumnNotFoundInTableException(column_name);
+        }
+    }
+    return result;
+}
 
 ptrdiff_t Table::get_pages_begin_offset() {
     move_to_position_pages();
