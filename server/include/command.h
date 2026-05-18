@@ -22,12 +22,13 @@ enum class CommandType {
 };
 
 /* helper функции для правильной сериализации данных */
-nlohmann::json columns_to_json(const std::vector<Column>& columns);
-std::vector<Column> columns_from_json(const nlohmann::json& j);
+nlohmann::json columns_to_json(const std::vector<Column> &columns);
 
-nlohmann::json values_to_json(const std::vector<Value>& values);
-std::vector<Value> values_from_json(const nlohmann::json& j);
+std::vector<Column> columns_from_json(const nlohmann::json &j);
 
+nlohmann::json values_to_json(const std::vector<Value> &values);
+
+std::vector<Value> values_from_json(const nlohmann::json &j);
 
 
 /**
@@ -49,7 +50,7 @@ protected:
      * @param db_name Имя базы данных
      * @return True если имя было установлено, false если уже было установлено
      */
-    virtual bool set_database_name(const std::string& db_name);
+    virtual bool set_database_name(const std::string &db_name);
 
 public:
     virtual nlohmann::json process_command() = 0;
@@ -120,7 +121,8 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
     explicit CreateTableCommand(const std::string &table_name, const std::vector<Column> &columns,
@@ -143,7 +145,8 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
     explicit DropTableCommand(const std::string &table_name, const std::string &database_name = "");
@@ -167,7 +170,8 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
     explicit InsertIntoCommand(const std::string &table_name, const std::vector<std::string> &column_names,
@@ -194,7 +198,8 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
     explicit UpdateCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
@@ -219,7 +224,8 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
     explicit DeleteFromCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
@@ -237,8 +243,7 @@ class SelectCommand : public Command {
     std::string _database_name;
     std::string _table_name;
 
-    std::optional<std::vector<std::string> > _column_names;
-    std::optional<std::vector<std::string> > _aliases;
+    const std::optional<std::unordered_map<std::string, Alias> > &_columns_with_aliases;
 
     std::unique_ptr<Condition> _condition;
 
@@ -246,18 +251,12 @@ protected:
     nlohmann::json get_success_message() const override;
 
     bool is_database_name_set() const override;
-    bool set_database_name(const std::string& db_name) override;
+
+    bool set_database_name(const std::string &db_name) override;
 
 public:
-    SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
-                  const std::string &database_name = "");
-
-    SelectCommand(const std::string &table_name, const std::vector<std::string> &column_names,
-                  std::unique_ptr<Condition> condition,
-                  const std::string &database_name = "");
-
-    SelectCommand(const std::string &table_name, const std::vector<std::string> &column_names,
-                  const std::vector<std::string> &aliases, std::unique_ptr<Condition> condition,
+    SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition = nullptr,
+                  const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases = std::nullopt,
                   const std::string &database_name = "");
 
     nlohmann::json process_command() override;
