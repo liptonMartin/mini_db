@@ -6,34 +6,34 @@
 
 // ==================== Helper functions ====================
 // Хелперы для сериализации/десериализации vector<Column>
-nlohmann::json columns_to_json(const std::vector<Column>& columns) {
+nlohmann::json columns_to_json(const std::vector<Column> &columns) {
     nlohmann::json j = nlohmann::json::array();
-    for (const auto& col : columns) {
+    for (const auto &col: columns) {
         j.push_back(col.to_json());
     }
     return j;
 }
 
-std::vector<Column> columns_from_json(const nlohmann::json& j) {
+std::vector<Column> columns_from_json(const nlohmann::json &j) {
     std::vector<Column> columns;
-    for (const auto& item : j) {
+    for (const auto &item: j) {
         columns.push_back(Column::from_json(item));
     }
     return columns;
 }
 
 // Хелперы для сериализации/десериализации vector<Value>
-nlohmann::json values_to_json(const std::vector<Value>& values) {
+nlohmann::json values_to_json(const std::vector<Value> &values) {
     nlohmann::json j = nlohmann::json::array();
-    for (const auto& val : values) {
+    for (const auto &val: values) {
         j.push_back(value_to_json(val));
     }
     return j;
 }
 
-std::vector<Value> values_from_json(const nlohmann::json& j) {
+std::vector<Value> values_from_json(const nlohmann::json &j) {
     std::vector<Value> values;
-    for (const auto& item : j) {
+    for (const auto &item: j) {
         values.push_back(value_from_json(item));
     }
     return values;
@@ -49,11 +49,11 @@ nlohmann::json Command::get_success_message() const {
 }
 
 bool Command::is_database_name_set() const {
-    return false;  // базовый класс не имеет database_name
+    return false; // базовый класс не имеет database_name
 }
 
-bool Command::set_database_name(const std::string& db_name) {
-    return false;  // базовый класс не поддерживает установку имени БД
+bool Command::set_database_name(const std::string &db_name) {
+    return false; // базовый класс не поддерживает установку имени БД
 }
 
 void Command::set_token(const std::string& token) {
@@ -179,7 +179,7 @@ nlohmann::json UseDatabaseCommand::get_success_message() const {
 // ==================== CreateTableCommand ====================
 
 CreateTableCommand::CreateTableCommand(const std::string &table_name, const std::vector<Column> &columns,
-                                        const std::string &database_name)
+                                       const std::string &database_name)
     : _database_name(database_name), _table_name(table_name), _columns(columns) {
 }
 
@@ -187,7 +187,7 @@ bool CreateTableCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool CreateTableCommand::set_database_name(const std::string& db_name) {
+bool CreateTableCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -246,7 +246,7 @@ bool DropTableCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool DropTableCommand::set_database_name(const std::string& db_name) {
+bool DropTableCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -295,16 +295,16 @@ nlohmann::json DropTableCommand::get_success_message() const {
 
 // ==================== InsertIntoCommand ====================
 
-InsertIntoCommand::InsertIntoCommand(const std::string &table_name, const std::vector<Column> &columns,
+InsertIntoCommand::InsertIntoCommand(const std::string &table_name, const std::vector<std::string> &column_names,
                                      const std::vector<Value> &values, const std::string &database_name)
-    : _database_name(database_name), _table_name(table_name), _columns(columns), _values(values) {
+    : _database_name(database_name), _table_name(table_name), _column_names(column_names), _values(values) {
 }
 
 bool InsertIntoCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool InsertIntoCommand::set_database_name(const std::string& db_name) {
+bool InsertIntoCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -315,7 +315,7 @@ bool InsertIntoCommand::set_database_name(const std::string& db_name) {
 nlohmann::json InsertIntoCommand::process_command() {
     try {
         // Всегда передаем _database_name (может быть пустой строкой)
-        StorageEngine::insert_elements(_database_name, _table_name, _columns, _values);
+        StorageEngine::insert_elements(_database_name, _table_name, _column_names, _values);
     } catch (const std::exception &e) {
         nlohmann::json response;
         response["Message"] = e.what();
@@ -331,7 +331,7 @@ std::string InsertIntoCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["columns"] = columns_to_json(_columns);
+    j["columns"] = _column_names;
     j["values"] = values_to_json(_values);
 
     return j.dump();
@@ -339,7 +339,7 @@ std::string InsertIntoCommand::serialize_command() {
 
 InsertIntoCommand InsertIntoCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    const std::vector<Column> columns = columns_from_json(json["columns"]);
+    const std::vector<std::string> columns = json["columns"];
     const std::vector<Value> values = values_from_json(json["values"]);
 
     if (json.contains("database_name")) {
@@ -358,17 +358,17 @@ nlohmann::json InsertIntoCommand::get_success_message() const {
 // ==================== UpdateCommand ====================
 
 UpdateCommand::UpdateCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
-                             const std::vector<Column> &columns, const std::vector<Value> &values,
+                             const std::vector<std::string> &column_names, const std::vector<Value> &values,
                              const std::string &database_name)
     : _database_name(database_name), _table_name(table_name), _condition(std::move(condition)),
-      _columns(columns), _values(values) {
+      _column_names(column_names), _values(values) {
 }
 
 bool UpdateCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool UpdateCommand::set_database_name(const std::string& db_name) {
+bool UpdateCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -379,7 +379,7 @@ bool UpdateCommand::set_database_name(const std::string& db_name) {
 nlohmann::json UpdateCommand::process_command() {
     try {
         // Всегда передаем _database_name (может быть пустой строкой)
-        StorageEngine::update_elements(_database_name, _table_name, std::move(_condition), _columns, _values);
+        StorageEngine::update_elements(_database_name, _table_name, std::move(_condition), _column_names, _values);
     } catch (const std::exception &e) {
         nlohmann::json response;
         response["Message"] = e.what();
@@ -395,8 +395,10 @@ std::string UpdateCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["condition"] = _condition->to_json();
-    j["columns"] = columns_to_json(_columns);
+    if (_condition) {
+        j["condition"] = _condition->to_json();
+    }
+    j["columns"] = _column_names;
     j["values"] = values_to_json(_values);
 
     return j.dump();
@@ -404,9 +406,13 @@ std::string UpdateCommand::serialize_command() {
 
 UpdateCommand UpdateCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    std::vector<Column> columns = columns_from_json(json["columns"]);
+    std::vector<std::string> columns = json["columns"];
     std::vector<Value> values = values_from_json(json["values"]);
-    auto condition = Condition::from_json(json["condition"]);
+
+    std::unique_ptr<Condition> condition = nullptr;
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
 
     if (json.contains("database_name")) {
         return UpdateCommand(json["table_name"], std::move(condition), columns, values, json["database_name"]);
@@ -432,7 +438,7 @@ bool DeleteFromCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool DeleteFromCommand::set_database_name(const std::string& db_name) {
+bool DeleteFromCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -459,14 +465,20 @@ std::string DeleteFromCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["condition"] = _condition->to_json();
+    if (_condition) {
+        j["condition"] = _condition->to_json();
+    }
 
     return j.dump();
 }
 
 DeleteFromCommand DeleteFromCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    auto condition = Condition::from_json(json["condition"]);
+
+    std::unique_ptr<Condition> condition = nullptr;
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
 
     if (json.contains("database_name")) {
         return DeleteFromCommand(json["table_name"], std::move(condition), json["database_name"]);
@@ -484,19 +496,9 @@ nlohmann::json DeleteFromCommand::get_success_message() const {
 // ==================== SelectCommand ====================
 
 SelectCommand::SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
+                             const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
                              const std::string &database_name)
-    : _database_name(database_name), _table_name(table_name), _condition(std::move(condition)) {
-}
-
-SelectCommand::SelectCommand(const std::string &table_name, const std::vector<Column> &columns,
-                             std::unique_ptr<Condition> condition, const std::string &database_name)
-    : _database_name(database_name), _table_name(table_name), _columns(columns), _condition(std::move(condition)) {
-}
-
-SelectCommand::SelectCommand(const std::string &table_name, const std::vector<Column> &columns,
-                             const std::vector<std::string> &aliases, std::unique_ptr<Condition> condition,
-                             const std::string &database_name)
-    : _database_name(database_name), _table_name(table_name), _columns(columns), _aliases(aliases),
+    : _database_name(database_name), _table_name(table_name), _columns_with_aliases(columns_with_aliases),
       _condition(std::move(condition)) {
 }
 
@@ -504,7 +506,7 @@ bool SelectCommand::is_database_name_set() const {
     return !_database_name.empty();
 }
 
-bool SelectCommand::set_database_name(const std::string& db_name) {
+bool SelectCommand::set_database_name(const std::string &db_name) {
     if (_database_name.empty() && !db_name.empty()) {
         _database_name = db_name;
         return true;
@@ -514,24 +516,14 @@ bool SelectCommand::set_database_name(const std::string& db_name) {
 
 nlohmann::json SelectCommand::process_command() {
     try {
-        // TODO:
-        // if (_columns.has_value() && _aliases.has_value()) {
-        //     // Всегда передаем _database_name (может быть пустой строкой)
-        //     return StorageEngine::select_elements(_database_name, _table_name, _columns.value(), _aliases.value(), *_condition);
-        // } else if (_columns.has_value()) {
-        //     return StorageEngine::select_elements(_database_name, _table_name, _columns.value(), *_condition);
-        // } else {
-        //     auto rows = StorageEngine::select_elements(_database_name, _table_name, std::move(_condition));
-        // }
-        auto rows = StorageEngine::select_elements(_database_name, _table_name, std::move(_condition));
+        return StorageEngine::select_elements(_database_name, _table_name, _columns_with_aliases,
+                                              std::move(_condition));
     } catch (const std::exception &e) {
         nlohmann::json response;
         response["Message"] = e.what();
         response["Status"] = 500;
         return response;
     }
-
-    return get_success_message(); // TODO: edit!
 }
 
 std::string SelectCommand::serialize_command() {
@@ -544,34 +536,32 @@ std::string SelectCommand::serialize_command() {
         j["condition"] = _condition->to_json();
     }
 
-    if (_columns.has_value()) {
-        j["columns"] = columns_to_json(_columns.value());
+    if (_columns_with_aliases.has_value()) {
+        j["columns_with_aliases"] = _columns_with_aliases;
     }
-    if (_aliases.has_value()) {
-        j["aliases"] = _aliases.value();
-    }
-
     return j.dump();
 }
 
 SelectCommand SelectCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    auto condition = Condition::from_json(json["condition"]);
+    std::unique_ptr<Condition> condition = nullptr;
+
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
+
     std::string database_name = json.contains("database_name") ? json["database_name"].get<std::string>() : "";
 
-    if (json.contains("columns") && json.contains("aliases")) {
-        std::vector<Column> columns = columns_from_json(json["columns"]);
-        std::vector<std::string> aliases = json["aliases"].get<std::vector<std::string>>();
-        return SelectCommand(json["table_name"], columns, aliases, std::move(condition), database_name);
-    } else if (json.contains("columns")) {
-        std::vector<Column> columns = columns_from_json(json["columns"]);
-        return SelectCommand(json["table_name"], columns, std::move(condition), database_name);
-    } else {
-        return SelectCommand(json["table_name"], std::move(condition), database_name);
+    std::optional<std::unordered_map<std::string, Alias> > columns_with_aliases = std::nullopt;
+    if (json.contains("columns_with_aliases")) {
+        columns_with_aliases = json["columns_with_aliases"].get<std::unordered_map<std::string, Alias> >();
     }
+
+    return SelectCommand(json["table_name"], std::move(condition), columns_with_aliases, database_name);
 }
 
 nlohmann::json SelectCommand::get_success_message() const {
+    // TODO: edit!
     nlohmann::json response;
     response["Status"] = 200;
     return response;
