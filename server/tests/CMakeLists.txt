@@ -8,3 +8,14 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
+
+add_executable(
+        test_parser
+        test_parser.cpp
+)
+target_link_libraries(
+        test_parser
+        PRIVATE
+        server
+        GTest::gtest_main
+)

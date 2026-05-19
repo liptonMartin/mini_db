@@ -128,12 +128,10 @@ template<> struct action<assign_s> {
 };
 
 
-struct spaces : pegtl::one<' '> {};
 struct grammar : pegtl::seq<
-    pegtl::list<pegtl::must<token>, spaces>,
     pegtl::star<pegtl::space>,
-    pegtl::opt<semicolon_s>,
-    pegtl::eof    // всегда доходим до конца для ошибок
+    pegtl::until<pegtl::eof, pegtl::must<pegtl::sor<token, pegtl::space>>>,
+    pegtl::eof
 > {};
 
 std::vector<Token> Lexer::tokenize(const std::string& input) {

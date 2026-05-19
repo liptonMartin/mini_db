@@ -278,5 +278,9 @@ TEST(LexerTest, IdentifierWithUnderscore) {
 
 TEST(LexerTest, IdentifierCannotStartWithDigit) {
     auto tokens = lex("123abc");
-    ASSERT_EQ(tokens.size(), 1);
+    ASSERT_EQ(tokens.size(), 2);
+    EXPECT_EQ(tokens[0].type, TypeToken::NUMBER);
+    EXPECT_EQ(tokens[0].value, "123");
+    EXPECT_EQ(tokens[1].type, TypeToken::IDENTIFIER);
+    EXPECT_EQ(tokens[1].value, "abc");
 }

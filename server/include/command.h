@@ -56,7 +56,13 @@ public:
 
     virtual std::string serialize_command();
 
+    virtual void set_token(const std::string& token);
+    std::string get_token() const;
+
     virtual ~Command() = default;
+
+protected:
+    std::string _jwt_token;
 };
 
 
