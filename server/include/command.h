@@ -243,7 +243,7 @@ class SelectCommand : public Command {
     std::string _database_name;
     std::string _table_name;
 
-    const std::optional<std::unordered_map<std::string, Alias> > &_columns_with_aliases;
+    std::optional<std::unordered_map<std::string, Alias> > _columns_with_aliases;
 
     std::unique_ptr<Condition> _condition;
 

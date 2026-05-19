@@ -385,7 +385,9 @@ std::string UpdateCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["condition"] = _condition->to_json();
+    if (_condition) {
+        j["condition"] = _condition->to_json();
+    }
     j["columns"] = _column_names;
     j["values"] = values_to_json(_values);
 
@@ -396,7 +398,11 @@ UpdateCommand UpdateCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
     std::vector<std::string> columns = json["columns"];
     std::vector<Value> values = values_from_json(json["values"]);
-    auto condition = Condition::from_json(json["condition"]);
+
+    std::unique_ptr<Condition> condition = nullptr;
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
 
     if (json.contains("database_name")) {
         return UpdateCommand(json["table_name"], std::move(condition), columns, values, json["database_name"]);
@@ -449,14 +455,20 @@ std::string DeleteFromCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["condition"] = _condition->to_json();
+    if (_condition) {
+        j["condition"] = _condition->to_json();
+    }
 
     return j.dump();
 }
 
 DeleteFromCommand DeleteFromCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    auto condition = Condition::from_json(json["condition"]);
+
+    std::unique_ptr<Condition> condition = nullptr;
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
 
     if (json.contains("database_name")) {
         return DeleteFromCommand(json["table_name"], std::move(condition), json["database_name"]);
@@ -510,7 +522,9 @@ std::string SelectCommand::serialize_command() {
         j["database_name"] = _database_name;
     }
     j["table_name"] = _table_name;
-    j["condition"] = _condition->to_json();
+    if (_condition) {
+        j["condition"] = _condition->to_json();
+    }
 
     if (_columns_with_aliases.has_value()) {
         j["columns_with_aliases"] = _columns_with_aliases;
@@ -520,7 +534,12 @@ std::string SelectCommand::serialize_command() {
 
 SelectCommand SelectCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
-    auto condition = Condition::from_json(json["condition"]);
+    std::unique_ptr<Condition> condition = nullptr;
+
+    if (json.contains("condition")) {
+        condition = Condition::from_json(json["condition"]);
+    }
+
     std::string database_name = json.contains("database_name") ? json["database_name"].get<std::string>() : "";
 
     std::optional<std::unordered_map<std::string, Alias> > columns_with_aliases = std::nullopt;
