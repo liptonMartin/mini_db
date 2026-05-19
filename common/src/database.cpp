@@ -95,7 +95,7 @@ void Database::drop_table(const std::string &name) {
         throw DatabaseDoesNotExistException(db_name);
     }
 
-    const auto table_path = path / (db_name + ".binary");
+    const auto table_path = path / db_name / (name + ".binary");
     _file.close();
     std::filesystem::remove(table_path);
 }
