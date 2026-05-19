@@ -6,8 +6,18 @@ add_executable(
         test_storage_engine
         test_storage_engine.cpp
 )
+add_executable(
+        test_command
+        test_command.cpp
+)
 target_link_libraries(
         test_lexer
+        PRIVATE
+        server
+        GTest::gtest_main
+)
+target_link_libraries(
+        test_command
         PRIVATE
         server
         GTest::gtest_main
