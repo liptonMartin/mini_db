@@ -265,8 +265,8 @@ TEST(ParserTest, SelectColumns) {
 
     auto json = select_cmd->serialize_command();
     auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed.contains("columns"));
-    EXPECT_EQ(parsed["columns"].size(), 2);
+    EXPECT_TRUE(parsed.contains("columns_with_aliases"));
+    EXPECT_EQ(parsed["columns_with_aliases"].size(), 2);
 }
 
 TEST(ParserTest, SelectWithCondition) {

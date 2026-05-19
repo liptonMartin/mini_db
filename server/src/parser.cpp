@@ -312,12 +312,7 @@ std::unique_ptr<Command> Parser::parse_insert_into() {
 
     expect_semicolon();
 
-    std::vector<Column> columns;
-    for (const auto& name : col_names) {
-        columns.emplace_back(name, DataType::Int, true, false);
-    }
-
-    return std::make_unique<InsertIntoCommand>(table_name, columns, values);
+    return std::make_unique<InsertIntoCommand>(table_name, col_names, values);
 }
 
 std::unique_ptr<Command> Parser::parse_update() {
@@ -328,7 +323,7 @@ std::unique_ptr<Command> Parser::parse_update() {
 
     expect(TypeToken::KEYWORD, "SET");
 
-    std::vector<Column> columns;
+    std::vector<std::string> col_names;
     std::vector<Value> values;
 
     do {
@@ -341,7 +336,7 @@ std::unique_ptr<Command> Parser::parse_update() {
 
         Value val = parse_value();
 
-        columns.emplace_back(col_name, DataType::Int, true, false);
+        col_names.push_back(col_name);
         values.push_back(std::move(val));
 
     } while (match(TypeToken::COMMA, ","));
@@ -351,7 +346,7 @@ std::unique_ptr<Command> Parser::parse_update() {
 
     expect_semicolon();
 
-    return std::make_unique<UpdateCommand>(table_name, std::move(condition), columns, values);
+    return std::make_unique<UpdateCommand>(table_name, std::move(condition), col_names, values);
 }
 
 std::unique_ptr<Command> Parser::parse_delete_from() {
@@ -371,35 +366,31 @@ std::unique_ptr<Command> Parser::parse_delete_from() {
 }
 
 std::unique_ptr<Command> Parser::parse_select() {
-    std::optional<std::vector<Column>> columns_opt;
-    std::optional<std::vector<std::string>> aliases_opt;
+    std::optional<std::unordered_map<std::string, Alias>> columns_opt;
 
     if (match(TypeToken::STAR, "*")) {
     }
     else {
-        std::vector<Column> columns;
-        std::vector<std::string> aliases;
+        std::unordered_map<std::string, Alias> column_map;
 
         do {
             if (!check(TypeToken::IDENTIFIER)) {
                 throw ParserException("Expected column name or * in SELECT");
             }
             std::string col_name = advance().value;
-            columns.emplace_back(col_name, DataType::Int, true, false);
 
-            std::string alias;
+            Alias alias = std::nullopt;
             if (match_keyword("AS")) {
                 if (!check(TypeToken::IDENTIFIER)) {
                     throw ParserException("Expected alias name after AS");
                 }
                 alias = advance().value;
             }
-            aliases.push_back(alias);
+            column_map[col_name] = alias;
 
         } while (match(TypeToken::COMMA, ","));
 
-        columns_opt = std::move(columns);
-        aliases_opt = std::move(aliases);
+        columns_opt = std::move(column_map);
     }
 
     expect(TypeToken::KEYWORD, "FROM");
@@ -416,11 +407,8 @@ std::unique_ptr<Command> Parser::parse_select() {
 
     expect_semicolon();
 
-    if (columns_opt.has_value() && aliases_opt.has_value()) {
-        return std::make_unique<SelectCommand>(table_name, columns_opt.value(), aliases_opt.value(), std::move(condition));
-    }
-    else if (columns_opt.has_value()) {
-        return std::make_unique<SelectCommand>(table_name, columns_opt.value(), std::move(condition));
+    if (columns_opt.has_value()) {
+        return std::make_unique<SelectCommand>(table_name, std::move(condition), columns_opt);
     }
     else {
         return std::make_unique<SelectCommand>(table_name, std::move(condition));
@@ -436,7 +424,6 @@ std::unique_ptr<Condition> Parser::parse_simple_condition() {
         throw ParserException("Expected column name in condition, got '" + current().value + "'");
     }
     std::string col_name = advance().value;
-    Column column(col_name, DataType::Int, true, false);
 
     if (match_keyword("BETWEEN")) {
         throw ParserException("BETWEEN is not supported in conditions");
@@ -460,7 +447,7 @@ std::unique_ptr<Condition> Parser::parse_simple_condition() {
     ComparisonDataType comp_type = string_to_comparison(op);
     Value val = parse_value();
 
-    return std::make_unique<ComparisonCondition>(column, comp_type, val);
+    return std::make_unique<ComparisonCondition>(col_name, comp_type, val);
 }
 
 Value Parser::parse_value() {
