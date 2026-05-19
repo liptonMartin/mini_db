@@ -56,8 +56,18 @@ bool Command::set_database_name(const std::string &db_name) {
     return false; // базовый класс не поддерживает установку имени БД
 }
 
+void Command::set_token(const std::string& token) {
+    _jwt_token = token;
+}
+
+std::string Command::get_token() const {
+    return _jwt_token;
+}
+
 std::string Command::serialize_command() {
-    return "";
+    nlohmann::json j;
+    j["jwt_token"] = _jwt_token; // Добавляем JWT токен в сериализацию
+    return j.dump();
 }
 
 // ==================== CreateDatabaseCommand ====================
@@ -525,7 +535,6 @@ std::string SelectCommand::serialize_command() {
     if (_condition) {
         j["condition"] = _condition->to_json();
     }
-
     if (_columns_with_aliases.has_value()) {
         j["columns_with_aliases"] = _columns_with_aliases;
     }
