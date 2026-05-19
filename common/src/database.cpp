@@ -16,6 +16,8 @@ Database::Database(const std::string &name, const bool need_to_create) {
         std::filesystem::create_directories(path_to_file);
     } else if (std::filesystem::exists(path_to_file) && need_to_create) {
         throw DatabaseHasAlreadyExistsException(name);
+    } else if (!std::filesystem::exists(path_to_file) && !need_to_create) {
+        throw DatabaseDoesNotExistException(name);
     }
 
     const auto schema_path = path_to_file / (name + ".schema");
@@ -95,8 +97,10 @@ void Database::drop_table(const std::string &name) {
         throw DatabaseDoesNotExistException(db_name);
     }
 
-    const auto table_path = path / db_name / (name + ".binary");
-    _file.close();
+    const auto table_path = path / (name + ".binary");
+    if (!std::filesystem::exists(table_path)) {
+        throw TableDoesNotExistException(name);
+    }
     std::filesystem::remove(table_path);
 }
 
