@@ -534,18 +534,7 @@ std::string SelectCommand::serialize_command() {
     j["table_name"] = _table_name;
     if (_condition) {
         j["condition"] = _condition->to_json();
-<<<<<<< HEAD
-=======
     }
-
-    if (_columns.has_value()) {
-        j["columns"] = columns_to_json(_columns.value());
-    }
-    if (_aliases.has_value()) {
-        j["aliases"] = _aliases.value();
->>>>>>> 13417979050204977d3242ad04254aad9de99237
-    }
-
     if (_columns_with_aliases.has_value()) {
         j["columns_with_aliases"] = _columns_with_aliases;
     }

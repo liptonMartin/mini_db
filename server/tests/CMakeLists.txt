@@ -16,7 +16,6 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
-<<<<<<< HEAD
 
 target_link_libraries(
         test_command
@@ -24,8 +23,6 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
-=======
->>>>>>> 13417979050204977d3242ad04254aad9de99237
 
 add_executable(
         test_parser
@@ -37,7 +34,6 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
-<<<<<<< HEAD
 
 target_link_libraries(
         test_storage_engine
@@ -45,5 +41,3 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
-=======
->>>>>>> 13417979050204977d3242ad04254aad9de99237
