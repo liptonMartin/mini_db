@@ -36,7 +36,7 @@ ComparisonCondition::ComparisonCondition(const std::string &column_name, const C
 nlohmann::json ComparisonCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "comparison";
-    j["column"] = _column_name;
+    j["column_name"] = _column_name;
     j["comparison_type"] = _comparison_type;
     j["value"] = value_to_json(_value);
     return j;
@@ -98,7 +98,7 @@ BetweenCondition::BetweenCondition(const std::string& column_name, Value start, 
 nlohmann::json BetweenCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "between";
-    j["column"] = _column_name;
+    j["column_name"] = _column_name;
     j["start"] = value_to_json(_start);
     j["end"] = value_to_json(_end);
     return j;
@@ -146,7 +146,7 @@ RegexCondition::RegexCondition(const std::string& column_name, std::string regex
 nlohmann::json RegexCondition::to_json() const {
     nlohmann::json j;
     j["type"] = "regex";
-    j["column"] = _column_name;
+    j["column_name"] = _column_name;
     j["regex"] = _regex;
     return j;
 }
