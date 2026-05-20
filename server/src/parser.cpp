@@ -374,10 +374,7 @@ std::unique_ptr<Command> Parser::parse_select() {
         std::unordered_map<std::string, Alias> column_map;
 
         do {
-            if (!check(TypeToken::IDENTIFIER)) {
-                throw ParserException("Expected column name or * in SELECT");
-            }
-            std::string col_name = advance().value;
+            std::string col_expr = parse_aggregate_or_column();
 
             Alias alias = std::nullopt;
             if (match_keyword("AS")) {
@@ -386,7 +383,7 @@ std::unique_ptr<Command> Parser::parse_select() {
                 }
                 alias = advance().value;
             }
-            column_map[col_name] = alias;
+            column_map[col_expr] = alias;
 
         } while (match(TypeToken::COMMA, ","));
 
@@ -415,22 +412,124 @@ std::unique_ptr<Command> Parser::parse_select() {
     }
 }
 
-std::unique_ptr<Condition> Parser::parse_condition() {
-    return parse_simple_condition();
+/* Парсит имя колонки или вызов агрегатной функции SUM/COUNT/AVG.
+   Возвращает строку — для агрегатов в формате "FUNC(arg)", для колонки просто имя. */
+std::string Parser::parse_aggregate_or_column() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected column name or aggregate function, got '" + current().value + "'");
+    }
+
+    std::string name = advance().value;
+
+    /* Проверяем, не агрегатная ли это функция */
+    std::string upper;
+    upper.resize(name.size());
+    std::transform(name.begin(), name.end(), upper.begin(), ::toupper);
+
+    if ((upper == "SUM" || upper == "COUNT" || upper == "AVG") && check(TypeToken::LBRACKET)) {
+        advance(); /* ( */
+        std::string arg;
+        if (match(TypeToken::STAR, "*")) {
+            arg = "*";
+        } else if (check(TypeToken::IDENTIFIER)) {
+            arg = advance().value;
+        } else {
+            throw ParserException("Expected column name or * inside aggregate function");
+        }
+        expect(TypeToken::RBRACKET, ")");
+
+        /* сохраняем в формате "SUM(age)", "COUNT(*)", "AVG(salary)" */
+        return upper + "(" + arg + ")";
+    }
+
+    return name;
 }
 
-std::unique_ptr<Condition> Parser::parse_simple_condition() {
+/* ==================== Conditions (precedence: NOT > AND > OR) ==================== */
+
+std::unique_ptr<Condition> Parser::parse_condition() {
+    return parse_or_expression();
+}
+
+/* OR — lowest precedence */
+std::unique_ptr<Condition> Parser::parse_or_expression() {
+    auto left = parse_and_expression();
+
+    while (match_keyword("OR")) {
+        auto right = parse_and_expression();
+        left = std::make_unique<OrCondition>(std::move(left), std::move(right));
+    }
+
+    return left;
+}
+
+/* AND — medium precedence */
+std::unique_ptr<Condition> Parser::parse_and_expression() {
+    auto left = parse_unary_expression();
+
+    while (match_keyword("AND")) {
+        auto right = parse_unary_expression();
+        left = std::make_unique<AndCondition>(std::move(left), std::move(right));
+    }
+
+    return left;
+}
+
+/* NOT — highest precedence (unary prefix) */
+std::unique_ptr<Condition> Parser::parse_unary_expression() {
+    if (match_keyword("NOT")) {
+        auto operand = parse_unary_expression();
+        return std::make_unique<NotCondition>(std::move(operand));
+    }
+
+    return parse_primary_condition();
+}
+
+/* Primary: ( expr ) or column op value / column BETWEEN / column LIKE */
+std::unique_ptr<Condition> Parser::parse_primary_condition() {
+    if (match(TypeToken::LBRACKET, "(")) {
+        auto expr = parse_or_expression();
+        expect(TypeToken::RBRACKET, ")");
+        return expr;
+    }
+
     if (!check(TypeToken::IDENTIFIER)) {
-        throw ParserException("Expected column name in condition, got '" + current().value + "'");
+        throw ParserException("Expected column name or '(' in condition, got '" + current().value + "'");
     }
     std::string col_name = advance().value;
 
     if (match_keyword("BETWEEN")) {
-        throw ParserException("BETWEEN is not supported in conditions");
+        Value start = parse_value();
+        expect(TypeToken::KEYWORD, "AND");
+        Value end = parse_value();
+        return std::make_unique<BetweenCondition>(col_name, std::move(start), std::move(end));
     }
 
     if (match_keyword("LIKE")) {
-        throw ParserException("LIKE is not supported in conditions");
+        if (!check(TypeToken::STRING)) {
+            throw ParserException("Expected string pattern after LIKE");
+        }
+        std::string pattern = advance().value;
+
+        /* Convert SQL LIKE pattern to regex: % → .*, _ → . */
+        std::string regex_pattern;
+        regex_pattern.reserve(pattern.size());
+        for (char c : pattern) {
+            if (c == '%') regex_pattern += ".*";
+            else if (c == '_') regex_pattern += ".";
+            else if (c == '.' || c == '*' || c == '+' || c == '?' || c == '(' || c == ')' ||
+                     c == '[' || c == ']' || c == '^' || c == '$' || c == '|' || c == '\\')
+                regex_pattern += '\\', regex_pattern += c;
+            else regex_pattern += c;
+        }
+
+        return std::make_unique<RegexCondition>(col_name, regex_pattern);
+    }
+
+    /* bare column name without operator — treat as "column is truthy" (col != 0) */
+    if (is_end() || check(TypeToken::RBRACKET) || check(TypeToken::SEMICOLON) ||
+        check(TypeToken::KEYWORD, "AND") || check(TypeToken::KEYWORD, "OR")) {
+        return std::make_unique<ComparisonCondition>(col_name, ComparisonDataType::NotEqual, Value(0));
     }
 
     std::string op;
