@@ -133,8 +133,11 @@ std::unique_ptr<Command> Parser::parse_command() {
         else if (match_keyword("TABLE")) {
             return parse_create_table();
         }
+        else if (match_keyword("USER")) {
+            return parse_create_user();
+        }
         else {
-            throw ParserException("Expected DATABASE or TABLE after CREATE, got '" + current().value + "'");
+            throw ParserException("Expected DATABASE, TABLE or USER after CREATE, got '" + current().value + "'");
         }
     }
 
@@ -168,6 +171,14 @@ std::unique_ptr<Command> Parser::parse_command() {
 
     if (match_keyword("SELECT")) {
         return parse_select();
+    }
+
+    if (match_keyword("AUTH")) {
+        return parse_auth();
+    }
+
+    if (match_keyword("ALTER")) {
+        return parse_alter();
     }
 
     throw ParserException("Unknown command starting with '" + current().value + "'");
@@ -366,28 +377,12 @@ std::unique_ptr<Command> Parser::parse_delete_from() {
 }
 
 std::unique_ptr<Command> Parser::parse_select() {
-    std::optional<std::unordered_map<std::string, Alias>> columns_opt;
+    std::vector<SelectTarget> targets;
 
-    if (match(TypeToken::STAR, "*")) {
-    }
-    else {
-        std::unordered_map<std::string, Alias> column_map;
-
+    if (!match(TypeToken::STAR, "*")) {
         do {
-            std::string col_expr = parse_aggregate_or_column();
-
-            Alias alias = std::nullopt;
-            if (match_keyword("AS")) {
-                if (!check(TypeToken::IDENTIFIER)) {
-                    throw ParserException("Expected alias name after AS");
-                }
-                alias = advance().value;
-            }
-            column_map[col_expr] = alias;
-
+            targets.push_back(parse_select_target());
         } while (match(TypeToken::COMMA, ","));
-
-        columns_opt = std::move(column_map);
     }
 
     expect(TypeToken::KEYWORD, "FROM");
@@ -404,33 +399,26 @@ std::unique_ptr<Command> Parser::parse_select() {
 
     expect_semicolon();
 
-    if (columns_opt.has_value()) {
-        return std::make_unique<SelectCommand>(table_name, std::move(condition), columns_opt);
-    }
-    else {
-        return std::make_unique<SelectCommand>(table_name, std::move(condition));
-    }
+    return std::make_unique<SelectCommand>(table_name, std::move(condition), targets);
 }
 
-/* Парсит имя колонки или вызов агрегатной функции SUM/COUNT/AVG.
-   Возвращает строку — для агрегатов в формате "FUNC(arg)", для колонки просто имя. */
-std::string Parser::parse_aggregate_or_column() {
+SelectTarget Parser::parse_select_target() {
     if (!check(TypeToken::IDENTIFIER)) {
         throw ParserException("Expected column name or aggregate function, got '" + current().value + "'");
     }
 
     std::string name = advance().value;
 
-    /* Проверяем, не агрегатная ли это функция */
     std::string upper;
     upper.resize(name.size());
     std::transform(name.begin(), name.end(), upper.begin(), ::toupper);
 
+    /* агрегатная функция: SUM/COUNT/AVG(...) */
     if ((upper == "SUM" || upper == "COUNT" || upper == "AVG") && check(TypeToken::LBRACKET)) {
-        advance(); /* ( */
+        advance();
         std::string arg;
         if (match(TypeToken::STAR, "*")) {
-            arg = "*";
+            arg = "";
         } else if (check(TypeToken::IDENTIFIER)) {
             arg = advance().value;
         } else {
@@ -438,14 +426,201 @@ std::string Parser::parse_aggregate_or_column() {
         }
         expect(TypeToken::RBRACKET, ")");
 
-        /* сохраняем в формате "SUM(age)", "COUNT(*)", "AVG(salary)" */
-        return upper + "(" + arg + ")";
+        AggregateFunction func;
+        if (upper == "SUM") func = AggregateFunction::Sum;
+        else if (upper == "COUNT") func = AggregateFunction::Count;
+        else func = AggregateFunction::Avg;
+
+        return SelectTarget{arg, std::nullopt, func};
     }
 
-    return name;
+    /* обычная колонка */
+    Alias alias = std::nullopt;
+    if (match_keyword("AS")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected alias name after AS");
+        }
+        alias = advance().value;
+    }
+    return SelectTarget{name, alias, std::nullopt};
 }
 
-/* ==================== Conditions (precedence: NOT > AND > OR) ==================== */
+/* ==================== CREATE USER ==================== */
+
+std::unique_ptr<Command> Parser::parse_create_user() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected username");
+    }
+    std::string username = advance().value;
+
+    expect(TypeToken::IDENTIFIER); // password
+    std::string password = advance().value;
+
+    expect_semicolon();
+
+    return std::make_unique<CreateUserCommand>(username, password);
+}
+
+/* ==================== AUTH ==================== */
+
+std::unique_ptr<Command> Parser::parse_auth() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected username");
+    }
+    std::string username = advance().value;
+
+    expect(TypeToken::IDENTIFIER); // password
+    std::string password = advance().value;
+
+    expect_semicolon();
+
+    return std::make_unique<AuthCommand>(username, password);
+}
+
+/* ==================== ALTER ==================== */
+
+std::unique_ptr<Command> Parser::parse_alter() {
+    if (match_keyword("USER")) {
+        return parse_alter_user();
+    }
+    if (match_keyword("GROUP")) {
+        return parse_alter_group();
+    }
+    if (match_keyword("DATABASE")) {
+        return parse_alter_database();
+    }
+    throw ParserException("Expected USER, GROUP or DATABASE after ALTER, got '" + current().value + "'");
+}
+
+std::unique_ptr<Command> Parser::parse_alter_user() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected username after ALTER USER");
+    }
+    std::string username = advance().value;
+
+    if (match_keyword("ADD") && match_keyword("TO") && match_keyword("GROUP")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected database name");
+        }
+        std::string database_name = advance().value;
+
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected group name");
+        }
+        std::string group_name = advance().value;
+
+        expect_semicolon();
+
+        return std::make_unique<AlterUserAddToGroupCommand>(username, database_name, group_name);
+    }
+
+    if (match_keyword("REMOVE") && match_keyword("FROM") && match_keyword("GROUP")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected database name");
+        }
+        std::string database_name = advance().value;
+
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected group name");
+        }
+        std::string group_name = advance().value;
+
+        expect_semicolon();
+
+        return std::make_unique<AlterUserRemoveFromGroupCommand>(username, database_name, group_name);
+    }
+
+    if (match_keyword("ADD") && (match_keyword("PERMISSION") || match_keyword("PERMISSIONS"))) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected database name");
+        }
+        std::string database_name = advance().value;
+
+        std::vector<std::string> permissions;
+        if (match(TypeToken::LBRACKET, "(")) {
+            permissions = parse_identifier_list();
+            expect(TypeToken::RBRACKET, ")");
+        } else {
+            throw ParserException("Expected permission list");
+        }
+
+        expect_semicolon();
+
+        return std::make_unique<AlterUserAddPermissionCommand>(username, database_name, permissions);
+    }
+
+    throw ParserException("Expected ADD TO GROUP, REMOVE FROM GROUP or ADD PERMISSION after ALTER USER");
+}
+
+std::unique_ptr<Command> Parser::parse_alter_group() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected group name after ALTER GROUP");
+    }
+    std::string group_name = advance().value;
+
+    if (match_keyword("ADD") && (match_keyword("PERMISSION") || match_keyword("PERMISSIONS"))) {
+        std::vector<std::string> permissions;
+        if (match(TypeToken::LBRACKET, "(")) {
+            permissions = parse_identifier_list();
+            expect(TypeToken::RBRACKET, ")");
+        } else {
+            throw ParserException("Expected permission list");
+        }
+
+        expect_semicolon();
+
+        return std::make_unique<AlterGroupAddPermissionCommand>(group_name, permissions);
+    }
+
+    if (match_keyword("DELETE") && (match_keyword("PERMISSION") || match_keyword("PERMISSIONS"))) {
+        std::vector<std::string> permissions;
+        if (match(TypeToken::LBRACKET, "(")) {
+            permissions = parse_identifier_list();
+            expect(TypeToken::RBRACKET, ")");
+        } else {
+            throw ParserException("Expected permission list");
+        }
+
+        expect_semicolon();
+
+        return std::make_unique<AlterGroupDeletePermissionCommand>(group_name, permissions);
+    }
+
+    throw ParserException("Expected ADD PERMISSION or DELETE PERMISSION after ALTER GROUP");
+}
+
+std::unique_ptr<Command> Parser::parse_alter_database() {
+    if (!check(TypeToken::IDENTIFIER)) {
+        throw ParserException("Expected database name after ALTER DATABASE");
+    }
+    std::string database_name = advance().value;
+
+    if (match_keyword("ADD") && match_keyword("GROUP")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected group name");
+        }
+        std::string group_name = advance().value;
+
+        expect_semicolon();
+
+        return std::make_unique<AlterDatabaseAddGroupCommand>(database_name, group_name);
+    }
+
+    if (match_keyword("REMOVE") && match_keyword("GROUP")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected group name");
+        }
+        std::string group_name = advance().value;
+
+        expect_semicolon();
+
+        return std::make_unique<AlterDatabaseRemoveGroupCommand>(database_name, group_name);
+    }
+
+    throw ParserException("Expected ADD GROUP or REMOVE GROUP after ALTER DATABASE");
+}
+
+/* ==================== Conditions (приоритет: NOT > AND > OR) ==================== */
 
 std::unique_ptr<Condition> Parser::parse_condition() {
     return parse_or_expression();

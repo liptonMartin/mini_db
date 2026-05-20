@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <optional>
 #include "lexer.h"
 #include "command.h"
 
@@ -41,6 +42,12 @@ private:
     std::unique_ptr<Command> parse_update();
     std::unique_ptr<Command> parse_delete_from();
     std::unique_ptr<Command> parse_select();
+    std::unique_ptr<Command> parse_create_user();
+    std::unique_ptr<Command> parse_auth();
+    std::unique_ptr<Command> parse_alter();
+    std::unique_ptr<Command> parse_alter_user();
+    std::unique_ptr<Command> parse_alter_group();
+    std::unique_ptr<Command> parse_alter_database();
 
     std::unique_ptr<Condition> parse_condition();
     std::unique_ptr<Condition> parse_or_expression();
@@ -51,7 +58,7 @@ private:
     Value parse_value();
     std::vector<std::string> parse_identifier_list();
     std::vector<Value> parse_value_list();
-    std::string parse_aggregate_or_column();
+    SelectTarget parse_select_target();
 };
 
 #endif //MINIDB_PARSER_H
