@@ -384,13 +384,13 @@ TEST(CommandSerializationTest, SelectCommand_WithColumnsNoAliases) {
     Column col("age", DataType::Int, false, false);
     auto condition = std::make_unique<ComparisonCondition>("age", ComparisonDataType::GreaterEqual, 18);
 
-    std::unordered_map<std::string, Alias> columns_with_aliases = {
-        {"id", std::nullopt},
-        {"name", std::nullopt},
-        {"email", std::nullopt}
+    std::vector<SelectTarget> targets = {
+        {"id", std::nullopt, std::nullopt},
+        {"name", std::nullopt, std::nullopt},
+        {"email", std::nullopt, std::nullopt}
     };
 
-    SelectCommand cmd("users", std::move(condition), columns_with_aliases);
+    SelectCommand cmd("users", std::move(condition), targets);
     std::string serialized = cmd.serialize_command();
 
     auto parsed = SelectCommand::parse_from_bytes(serialized);
@@ -403,13 +403,13 @@ TEST(CommandSerializationTest, SelectCommand_WithAliases) {
     Column col("status", DataType::String, false, false);
     auto condition = std::make_unique<ComparisonCondition>("status", ComparisonDataType::Equal, std::string("active"));
 
-    std::unordered_map<std::string, Alias> columns_with_aliases = {
-        {"id", std::string("user_id")},
-        {"name", std::string("user_name")},
-        {"email", std::nullopt}
+    std::vector<SelectTarget> targets = {
+        {"id", std::string("user_id"), std::nullopt},
+        {"name", std::string("user_name"), std::nullopt},
+        {"email", std::nullopt, std::nullopt}
     };
 
-    SelectCommand cmd("users", std::move(condition), columns_with_aliases, "testdb");
+    SelectCommand cmd("users", std::move(condition), targets, "testdb");
     std::string serialized = cmd.serialize_command();
 
     auto parsed = SelectCommand::parse_from_bytes(serialized);
@@ -422,7 +422,7 @@ TEST(CommandSerializationTest, SelectCommand_WithDatabase) {
     Column col("id", DataType::Int, false, false);
     auto condition = std::make_unique<ComparisonCondition>("id", ComparisonDataType::NotEqual, 0);
 
-    SelectCommand cmd("users", std::move(condition), std::nullopt, "mydb");
+    SelectCommand cmd("users", std::move(condition), std::vector<SelectTarget>{}, "mydb");
     std::string serialized = cmd.serialize_command();
 
     auto parsed = SelectCommand::parse_from_bytes(serialized);
@@ -435,11 +435,11 @@ TEST(CommandSerializationTest, SelectCommand_RegexCondition) {
     Column col("name", DataType::String, false, false);
     auto condition = std::make_unique<RegexCondition>("name", "^[A-Z].*");
 
-    std::unordered_map<std::string, Alias> columns_with_aliases = {
-        {"name", std::nullopt}
+    std::vector<SelectTarget> targets = {
+        {"name", std::nullopt, std::nullopt}
     };
 
-    SelectCommand cmd("users", std::move(condition), columns_with_aliases, "testdb");
+    SelectCommand cmd("users", std::move(condition), targets, "testdb");
     std::string serialized = cmd.serialize_command();
 
     auto parsed = SelectCommand::parse_from_bytes(serialized);
@@ -473,12 +473,12 @@ TEST(CommandSerializationTest, SelectCommand_NullCondition) {
 }
 
 TEST(CommandSerializationTest, SelectCommand_NullConditionWithColumns) {
-    std::unordered_map<std::string, Alias> columns_with_aliases = {
-        {"id", std::nullopt},
-        {"name", std::string("username")}
+    std::vector<SelectTarget> targets = {
+        {"id", std::nullopt, std::nullopt},
+        {"name", std::string("username"), std::nullopt}
     };
 
-    SelectCommand cmd("users", nullptr, columns_with_aliases);
+    SelectCommand cmd("users", nullptr, targets);
 
     EXPECT_NO_THROW({
         std::string serialized = cmd.serialize_command();
@@ -487,7 +487,7 @@ TEST(CommandSerializationTest, SelectCommand_NullConditionWithColumns) {
 }
 
 TEST(CommandSerializationTest, SelectCommand_NullConditionWithDatabase) {
-    SelectCommand cmd("users", nullptr, std::nullopt, "testdb");
+    SelectCommand cmd("users", nullptr, std::vector<SelectTarget>{}, "testdb");
 
     EXPECT_NO_THROW({
         std::string serialized = cmd.serialize_command();
