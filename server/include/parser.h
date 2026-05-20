@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <optional>
 #include "lexer.h"
 #include "command.h"
 
@@ -51,7 +52,7 @@ private:
     Value parse_value();
     std::vector<std::string> parse_identifier_list();
     std::vector<Value> parse_value_list();
-    std::string parse_aggregate_or_column();
+    SelectTarget parse_select_target();
 };
 
 #endif //MINIDB_PARSER_H

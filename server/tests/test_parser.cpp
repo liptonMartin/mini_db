@@ -265,8 +265,12 @@ TEST(ParserTest, SelectColumns) {
 
     auto json = select_cmd->serialize_command();
     auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed.contains("columns_with_aliases"));
-    EXPECT_EQ(parsed["columns_with_aliases"].size(), 2);
+    EXPECT_TRUE(parsed.contains("select_targets"));
+    EXPECT_EQ(parsed["select_targets"].size(), 2);
+    EXPECT_EQ(parsed["select_targets"][0]["type"], "column");
+    EXPECT_EQ(parsed["select_targets"][0]["column_name"], "name");
+    EXPECT_EQ(parsed["select_targets"][1]["type"], "column");
+    EXPECT_EQ(parsed["select_targets"][1]["column_name"], "email");
 }
 
 TEST(ParserTest, SelectWithCondition) {
@@ -410,9 +414,11 @@ TEST(ParserTest, SelectSum) {
     ASSERT_NE(cmd, nullptr);
     auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
     ASSERT_NE(select_cmd, nullptr);
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("SUM(age)"));
+    auto targets = select_cmd->get_select_targets();
+    ASSERT_EQ(targets.size(), 1);
+    EXPECT_EQ(targets[0].column_name, "age");
+    ASSERT_TRUE(targets[0].agg_func.has_value());
+    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Sum);
 }
 
 TEST(ParserTest, SelectCount) {
@@ -420,9 +426,11 @@ TEST(ParserTest, SelectCount) {
     ASSERT_NE(cmd, nullptr);
     auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
     ASSERT_NE(select_cmd, nullptr);
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("COUNT(*)"));
+    auto targets = select_cmd->get_select_targets();
+    ASSERT_EQ(targets.size(), 1);
+    EXPECT_TRUE(targets[0].column_name.empty());
+    ASSERT_TRUE(targets[0].agg_func.has_value());
+    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Count);
 }
 
 TEST(ParserTest, SelectAvg) {
@@ -430,9 +438,11 @@ TEST(ParserTest, SelectAvg) {
     ASSERT_NE(cmd, nullptr);
     auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
     ASSERT_NE(select_cmd, nullptr);
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("AVG(salary)"));
+    auto targets = select_cmd->get_select_targets();
+    ASSERT_EQ(targets.size(), 1);
+    EXPECT_EQ(targets[0].column_name, "salary");
+    ASSERT_TRUE(targets[0].agg_func.has_value());
+    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Avg);
 }
 
 TEST(ParserTest, SelectMixedAggregatesAndColumns) {
@@ -440,13 +450,23 @@ TEST(ParserTest, SelectMixedAggregatesAndColumns) {
     ASSERT_NE(cmd, nullptr);
     auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
     ASSERT_NE(select_cmd, nullptr);
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["columns_with_aliases"].size(), 4);
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("name"));
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("SUM(age)"));
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("COUNT(*)"));
-    EXPECT_TRUE(parsed["columns_with_aliases"].contains("AVG(salary)"));
+    auto targets = select_cmd->get_select_targets();
+    ASSERT_EQ(targets.size(), 4);
+    /* name */
+    EXPECT_EQ(targets[0].column_name, "name");
+    EXPECT_FALSE(targets[0].agg_func.has_value());
+    /* SUM(age) */
+    EXPECT_EQ(targets[1].column_name, "age");
+    ASSERT_TRUE(targets[1].agg_func.has_value());
+    EXPECT_EQ(targets[1].agg_func.value(), AggregateFunction::Sum);
+    /* COUNT(*) */
+    EXPECT_TRUE(targets[2].column_name.empty());
+    ASSERT_TRUE(targets[2].agg_func.has_value());
+    EXPECT_EQ(targets[2].agg_func.value(), AggregateFunction::Count);
+    /* AVG(salary) */
+    EXPECT_EQ(targets[3].column_name, "salary");
+    ASSERT_TRUE(targets[3].agg_func.has_value());
+    EXPECT_EQ(targets[3].agg_func.value(), AggregateFunction::Avg);
 }
 
 // ==================== Error cases ====================

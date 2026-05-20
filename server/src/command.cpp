@@ -495,11 +495,69 @@ nlohmann::json DeleteFromCommand::get_success_message() const {
 
 // ==================== SelectCommand ====================
 
+static std::string agg_func_to_string(AggregateFunction func) {
+    switch (func) {
+        case AggregateFunction::Sum: return "sum";
+        case AggregateFunction::Count: return "count";
+        case AggregateFunction::Avg: return "avg";
+    }
+    return "";
+}
+
+static AggregateFunction string_to_agg_func(const std::string &s) {
+    if (s == "sum") return AggregateFunction::Sum;
+    if (s == "count") return AggregateFunction::Count;
+    if (s == "avg") return AggregateFunction::Avg;
+    throw std::runtime_error("Unknown aggregate function: " + s);
+}
+
+static nlohmann::json select_target_to_json(const SelectTarget &t) {
+    nlohmann::json j;
+    if (t.agg_func.has_value()) {
+        j["type"] = "aggregate";
+        j["func"] = agg_func_to_string(t.agg_func.value());
+        j["column_name"] = t.column_name;
+    } else {
+        j["type"] = "column";
+        j["column_name"] = t.column_name;
+        if (t.alias.has_value()) {
+            j["alias"] = t.alias.value();
+        }
+    }
+    return j;
+}
+
+static SelectTarget select_target_from_json(const nlohmann::json &j) {
+    SelectTarget t;
+    if (j.at("type") == "aggregate") {
+        t.agg_func = string_to_agg_func(j.at("func"));
+        t.column_name = j.value("column_name", "");
+    } else {
+        t.column_name = j.at("column_name");
+        if (j.contains("alias")) {
+            t.alias = j["alias"].get<std::string>();
+        }
+    }
+    return t;
+}
+
 SelectCommand::SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition,
-                             const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
+                             const std::vector<SelectTarget> &select_targets,
                              const std::string &database_name)
-    : _database_name(database_name), _table_name(table_name), _columns_with_aliases(columns_with_aliases),
+    : _database_name(database_name), _table_name(table_name), _select_targets(select_targets),
       _condition(std::move(condition)) {
+}
+
+void SelectCommand::add_column(const std::string &column_name, const Alias &alias) {
+    _select_targets.push_back({column_name, alias, std::nullopt});
+}
+
+void SelectCommand::add_aggregate(AggregateFunction func, const std::string &column_name) {
+    _select_targets.push_back({column_name, std::nullopt, func});
+}
+
+const std::vector<SelectTarget> &SelectCommand::get_select_targets() const {
+    return _select_targets;
 }
 
 bool SelectCommand::is_database_name_set() const {
@@ -516,8 +574,32 @@ bool SelectCommand::set_database_name(const std::string &db_name) {
 
 nlohmann::json SelectCommand::process_command() {
     try {
-        return StorageEngine::select_elements(_database_name, _table_name, _columns_with_aliases,
-                                              std::move(_condition));
+        /* собираем map колонок для storage engine (только обычные колонки) */
+        std::optional<std::unordered_map<std::string, Alias>> columns_map = std::nullopt;
+        for (const auto &t : _select_targets) {
+            if (!t.agg_func.has_value() && !columns_map.has_value()) {
+                columns_map = std::unordered_map<std::string, Alias>();
+            }
+            if (!t.agg_func.has_value()) {
+                (*columns_map)[t.column_name] = t.alias;
+            }
+        }
+
+        auto raw = StorageEngine::select_elements(_database_name, _table_name, columns_map,
+                                                  std::move(_condition));
+
+        /* переставляем ключи в порядке _select_targets */
+        nlohmann::json ordered;
+        if (_select_targets.empty()) {
+            /* SELECT * — берём как есть */
+            ordered = std::move(raw);
+        } else {
+            for (const auto &t : _select_targets) {
+                std::string key = t.alias.has_value() ? t.alias.value() : t.column_name;
+                ordered[key] = raw.value(key, nlohmann::json::array());
+            }
+        }
+        return ordered;
     } catch (const std::exception &e) {
         nlohmann::json response;
         response["Message"] = e.what();
@@ -535,8 +617,9 @@ std::string SelectCommand::serialize_command() {
     if (_condition) {
         j["condition"] = _condition->to_json();
     }
-    if (_columns_with_aliases.has_value()) {
-        j["columns_with_aliases"] = _columns_with_aliases;
+    j["select_targets"] = nlohmann::json::array();
+    for (const auto &t : _select_targets) {
+        j["select_targets"].push_back(select_target_to_json(t));
     }
     return j.dump();
 }
@@ -551,12 +634,14 @@ SelectCommand SelectCommand::parse_from_bytes(const std::string &bytes) {
 
     std::string database_name = json.contains("database_name") ? json["database_name"].get<std::string>() : "";
 
-    std::optional<std::unordered_map<std::string, Alias> > columns_with_aliases = std::nullopt;
-    if (json.contains("columns_with_aliases")) {
-        columns_with_aliases = json["columns_with_aliases"].get<std::unordered_map<std::string, Alias> >();
+    std::vector<SelectTarget> targets;
+    if (json.contains("select_targets")) {
+        for (const auto &item : json["select_targets"]) {
+            targets.push_back(select_target_from_json(item));
+        }
     }
 
-    return SelectCommand(json["table_name"], std::move(condition), columns_with_aliases, database_name);
+    return SelectCommand(json["table_name"], std::move(condition), targets, database_name);
 }
 
 nlohmann::json SelectCommand::get_success_message() const {

@@ -245,11 +245,19 @@ public:
 };
 
 
+enum class AggregateFunction { Sum, Count, Avg };
+
+struct SelectTarget {
+    std::string column_name;                     // имя колонки (пусто для COUNT(*))
+    Alias alias;                                 // опциональный алиас
+    std::optional<AggregateFunction> agg_func;   // nullopt для обычных колонок
+};
+
 class SelectCommand : public Command {
     std::string _database_name;
     std::string _table_name;
 
-    std::optional<std::unordered_map<std::string, Alias> > _columns_with_aliases;
+    std::vector<SelectTarget> _select_targets;
 
     std::unique_ptr<Condition> _condition;
 
@@ -262,8 +270,14 @@ protected:
 
 public:
     SelectCommand(const std::string &table_name, std::unique_ptr<Condition> condition = nullptr,
-                  const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases = std::nullopt,
+                  const std::vector<SelectTarget> &select_targets = {},
                   const std::string &database_name = "");
+
+    void add_column(const std::string &column_name, const Alias &alias = std::nullopt);
+
+    void add_aggregate(AggregateFunction func, const std::string &column_name);
+
+    const std::vector<SelectTarget> &get_select_targets() const;
 
     nlohmann::json process_command() override;
 

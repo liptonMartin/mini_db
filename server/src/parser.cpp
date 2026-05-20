@@ -366,28 +366,12 @@ std::unique_ptr<Command> Parser::parse_delete_from() {
 }
 
 std::unique_ptr<Command> Parser::parse_select() {
-    std::optional<std::unordered_map<std::string, Alias>> columns_opt;
+    std::vector<SelectTarget> targets;
 
-    if (match(TypeToken::STAR, "*")) {
-    }
-    else {
-        std::unordered_map<std::string, Alias> column_map;
-
+    if (!match(TypeToken::STAR, "*")) {
         do {
-            std::string col_expr = parse_aggregate_or_column();
-
-            Alias alias = std::nullopt;
-            if (match_keyword("AS")) {
-                if (!check(TypeToken::IDENTIFIER)) {
-                    throw ParserException("Expected alias name after AS");
-                }
-                alias = advance().value;
-            }
-            column_map[col_expr] = alias;
-
+            targets.push_back(parse_select_target());
         } while (match(TypeToken::COMMA, ","));
-
-        columns_opt = std::move(column_map);
     }
 
     expect(TypeToken::KEYWORD, "FROM");
@@ -404,33 +388,26 @@ std::unique_ptr<Command> Parser::parse_select() {
 
     expect_semicolon();
 
-    if (columns_opt.has_value()) {
-        return std::make_unique<SelectCommand>(table_name, std::move(condition), columns_opt);
-    }
-    else {
-        return std::make_unique<SelectCommand>(table_name, std::move(condition));
-    }
+    return std::make_unique<SelectCommand>(table_name, std::move(condition), targets);
 }
 
-/* Парсит имя колонки или вызов агрегатной функции SUM/COUNT/AVG.
-   Возвращает строку — для агрегатов в формате "FUNC(arg)", для колонки просто имя. */
-std::string Parser::parse_aggregate_or_column() {
+SelectTarget Parser::parse_select_target() {
     if (!check(TypeToken::IDENTIFIER)) {
         throw ParserException("Expected column name or aggregate function, got '" + current().value + "'");
     }
 
     std::string name = advance().value;
 
-    /* Проверяем, не агрегатная ли это функция */
     std::string upper;
     upper.resize(name.size());
     std::transform(name.begin(), name.end(), upper.begin(), ::toupper);
 
+    /* агрегатная функция: SUM/COUNT/AVG(...) */
     if ((upper == "SUM" || upper == "COUNT" || upper == "AVG") && check(TypeToken::LBRACKET)) {
-        advance(); /* ( */
+        advance();
         std::string arg;
         if (match(TypeToken::STAR, "*")) {
-            arg = "*";
+            arg = "";
         } else if (check(TypeToken::IDENTIFIER)) {
             arg = advance().value;
         } else {
@@ -438,14 +415,26 @@ std::string Parser::parse_aggregate_or_column() {
         }
         expect(TypeToken::RBRACKET, ")");
 
-        /* сохраняем в формате "SUM(age)", "COUNT(*)", "AVG(salary)" */
-        return upper + "(" + arg + ")";
+        AggregateFunction func;
+        if (upper == "SUM") func = AggregateFunction::Sum;
+        else if (upper == "COUNT") func = AggregateFunction::Count;
+        else func = AggregateFunction::Avg;
+
+        return SelectTarget{arg, std::nullopt, func};
     }
 
-    return name;
+    /* обычная колонка */
+    Alias alias = std::nullopt;
+    if (match_keyword("AS")) {
+        if (!check(TypeToken::IDENTIFIER)) {
+            throw ParserException("Expected alias name after AS");
+        }
+        alias = advance().value;
+    }
+    return SelectTarget{name, alias, std::nullopt};
 }
 
-/* ==================== Conditions (precedence: NOT > AND > OR) ==================== */
+/* ==================== Conditions (приоритет: NOT > AND > OR) ==================== */
 
 std::unique_ptr<Condition> Parser::parse_condition() {
     return parse_or_expression();
