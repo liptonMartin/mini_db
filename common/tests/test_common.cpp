@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <cassert>
 
 #include "datatypes.h"
 
@@ -21,9 +22,12 @@ int main() {
     auto page = Page::create_page();
     std::vector<char> data;
     data.push_back('a');
-    page.insert_element(data);
-    page.insert_element(data);
-    page.insert_element(data);
+    const auto first_slot_id = page.insert_element(data);
+    const auto second_slot_id = page.insert_element(data);
+    const auto third_slot_id = page.insert_element(data);
+    assert(first_slot_id == 0);
+    assert(second_slot_id == 1);
+    assert(third_slot_id == 2);
 
     std::vector<Slot> occupied_slots = page.get_occupied_slots();
     std::vector<Slot> free_slots = page.get_free_slots();
@@ -35,7 +39,8 @@ int main() {
     slots = page.get_slots();
 
     std::vector<char> big_data{'b', 'b', 'b'};
-    page.insert_element(big_data);
+    const auto reused_slot_id = page.insert_element(big_data);
+    assert(reused_slot_id == second_slot_id);
     occupied_slots = page.get_occupied_slots();
     free_slots = page.get_free_slots();
     slots = page.get_slots();

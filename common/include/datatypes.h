@@ -3,6 +3,8 @@
 
 #ifndef MINIDB_DATATYPES_H
 #define MINIDB_DATATYPES_H
+#include <any>
+#include <cstddef>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -12,6 +14,7 @@
 #include <variant>
 #include <nlohmann/json.hpp>
 
+using Values = std::variant<int, std::string>;
 
 class Null {
 public:
@@ -206,6 +209,24 @@ public:
     void erase_element_from_page(ptrdiff_t page_id, ptrdiff_t slot_id) const;
 };
 
+class PageManager {
+    std::fstream &_file;
+    ptrdiff_t _pages_begin_offset;
+
+    ptrdiff_t page_offset(ptrdiff_t page_id) const;
+
+public:
+    PageManager(std::fstream &file, ptrdiff_t pages_begin_offset);
+
+    ptrdiff_t allocate_page();
+
+    ptrdiff_t search_free_page(ptrdiff_t need_size);
+
+    std::vector<char> read_page(ptrdiff_t page_id);
+
+    void write_page(ptrdiff_t page_id, const std::vector<char> &data);
+};
+
 enum class DataType { Int, String };
 
 class Column {
@@ -297,6 +318,56 @@ public:
 
     nlohmann::json to_json() const override;
 };
+
+
+enum class ComparisonDataType {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+};
+
+
+class Condition {
+    Column _column{};
+
+public:
+    virtual ~Condition() = default;
+
+    virtual bool evaluate() const = 0;
+};
+
+class ComparisonCondition : public Condition {
+    ComparisonDataType _comparison_type;
+    std::any _value;
+
+public:
+    ComparisonCondition(Column column, ComparisonDataType comparison_type, std::any value);
+
+    bool evaluate() const override;
+};
+
+class BetweenCondition : public Condition {
+    Column _column_start;
+    Column _column_end;
+
+public:
+    BetweenCondition(Column column, Column column_start, Column column_end);
+
+    bool evaluate() const override;
+};
+
+class RegexCondition : public Condition {
+    std::string _regex;
+
+public:
+    RegexCondition(Column column, std::string regex);
+
+    bool evaluate() const override;
+};
+
 
 /**
  * На первой страницы файла {name}.binary хранится :
@@ -419,6 +490,13 @@ public:
     std::vector<Row> select_elements(const std::string &table_name,
                                      const std::optional<std::unordered_map<std::string, Alias> > &columns_with_aliases,
                                      std::unique_ptr<Condition> condition);
+
+    /**
+     *
+     * @param db_name Имя базы данных
+     * @exception DatabaseDoesNotExistException Попытка удалить несуществующей базы данных
+     */
+    void drop_database(const std::string& db_name);
 
     std::string get_name();
 

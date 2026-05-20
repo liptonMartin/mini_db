@@ -2,6 +2,7 @@ add_library(
         common
         src/database.cpp
         src/page.cpp
+        src/page_manager.cpp
         src/slot.cpp
         src/table.cpp
         src/page_manager.cpp
@@ -9,6 +10,8 @@ add_library(
         include/datatypes.h
         include/constants.h
         include/exceptions.h
+        include/bstarplus_index_tree.h
+        src/bstarplus_index_tree.cpp
 )
 
 target_include_directories(
@@ -27,4 +30,6 @@ target_link_libraries(
         OpenSSL::SSL
         OpenSSL::Crypto
 )
+add_subdirectory(tests)
+
 add_subdirectory(tests)
