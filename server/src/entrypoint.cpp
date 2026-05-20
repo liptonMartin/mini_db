@@ -56,6 +56,7 @@ void Entrypoint::add_storage_node() {
 
         _logger->info("Starting new process with PID {}", child_process_ptr->id());
 
+        _pending_processes.push(child_process_ptr);
         start_accept(child_process_ptr);
         start_heartbeat_accept(child_process_ptr);
     } catch (const std::system_error &e) {
