@@ -43,11 +43,11 @@ target_link_libraries(
 )
 
 add_executable(
-        test_heartbit
+        test_heartbeat
         test_heartbeat.cpp
 )
 target_link_libraries(
-        test_heartbit
+        test_heartbeat
         PRIVATE
         server
         GTest::gtest_main
