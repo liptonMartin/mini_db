@@ -72,8 +72,9 @@ std::string Command::serialize_command() {
 
 // ==================== CreateDatabaseCommand ====================
 
-CreateDatabaseCommand::CreateDatabaseCommand(const std::string &database_name)
-    : _database_name(database_name) {
+CreateDatabaseCommand::CreateDatabaseCommand(const std::string &database_name,
+                                             const std::vector<std::string> &group_names)
+    : _database_name(database_name), _group_names(group_names) {
 }
 
 nlohmann::json CreateDatabaseCommand::process_command() {
@@ -91,12 +92,18 @@ nlohmann::json CreateDatabaseCommand::process_command() {
 std::string CreateDatabaseCommand::serialize_command() {
     nlohmann::json j;
     j["database_name"] = _database_name;
+    if (!_group_names.empty()) {
+        j["group_names"] = _group_names;
+    }
 
     return j.dump();
 }
 
 CreateDatabaseCommand CreateDatabaseCommand::parse_from_bytes(const std::string &bytes) {
     auto json = nlohmann::json::parse(bytes);
+    if (json.contains("group_names")) {
+        return CreateDatabaseCommand(json["database_name"], json["group_names"].get<std::vector<std::string>>());
+    }
     return CreateDatabaseCommand(json["database_name"]);
 }
 
@@ -632,6 +639,309 @@ SelectCommand SelectCommand::parse_from_bytes(const std::string &bytes) {
 nlohmann::json SelectCommand::get_success_message() const {
     // TODO: edit!
     nlohmann::json response;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== CreateUserCommand ====================
+
+CreateUserCommand::CreateUserCommand(const std::string &username, const std::string &password)
+    : _username(username), _password(password) {
+}
+
+nlohmann::json CreateUserCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "CreateUserCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string CreateUserCommand::serialize_command() {
+    nlohmann::json j;
+    j["username"] = _username;
+    j["password"] = _password;
+    return j.dump();
+}
+
+CreateUserCommand CreateUserCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return CreateUserCommand(json["username"], json["password"]);
+}
+
+nlohmann::json CreateUserCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "User " + _username + " created";
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AuthCommand ====================
+
+AuthCommand::AuthCommand(const std::string &username, const std::string &password)
+    : _username(username), _password(password) {
+}
+
+nlohmann::json AuthCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AuthCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AuthCommand::serialize_command() {
+    nlohmann::json j;
+    j["username"] = _username;
+    j["password"] = _password;
+    return j.dump();
+}
+
+AuthCommand AuthCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AuthCommand(json["username"], json["password"]);
+}
+
+nlohmann::json AuthCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Auth successful";
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterUserAddToGroupCommand ====================
+
+AlterUserAddToGroupCommand::AlterUserAddToGroupCommand(const std::string &username, const std::string &database_name,
+                                                       const std::string &group_name)
+    : _username(username), _database_name(database_name), _group_name(group_name) {
+}
+
+nlohmann::json AlterUserAddToGroupCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterUserAddToGroupCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterUserAddToGroupCommand::serialize_command() {
+    nlohmann::json j;
+    j["username"] = _username;
+    j["database_name"] = _database_name;
+    j["group_name"] = _group_name;
+    return j.dump();
+}
+
+AlterUserAddToGroupCommand AlterUserAddToGroupCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterUserAddToGroupCommand(json["username"], json["database_name"], json["group_name"]);
+}
+
+nlohmann::json AlterUserAddToGroupCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "User " + _username + " added to group " + _group_name;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterUserRemoveFromGroupCommand ====================
+
+AlterUserRemoveFromGroupCommand::AlterUserRemoveFromGroupCommand(const std::string &username,
+                                                                 const std::string &database_name,
+                                                                 const std::string &group_name)
+    : _username(username), _database_name(database_name), _group_name(group_name) {
+}
+
+nlohmann::json AlterUserRemoveFromGroupCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterUserRemoveFromGroupCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterUserRemoveFromGroupCommand::serialize_command() {
+    nlohmann::json j;
+    j["username"] = _username;
+    j["database_name"] = _database_name;
+    j["group_name"] = _group_name;
+    return j.dump();
+}
+
+AlterUserRemoveFromGroupCommand AlterUserRemoveFromGroupCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterUserRemoveFromGroupCommand(json["username"], json["database_name"], json["group_name"]);
+}
+
+nlohmann::json AlterUserRemoveFromGroupCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "User " + _username + " removed from group " + _group_name;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterUserAddPermissionCommand ====================
+
+AlterUserAddPermissionCommand::AlterUserAddPermissionCommand(const std::string &username,
+                                                             const std::string &database_name,
+                                                             const std::vector<std::string> &permissions)
+    : _username(username), _database_name(database_name), _permissions(permissions) {
+}
+
+nlohmann::json AlterUserAddPermissionCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterUserAddPermissionCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterUserAddPermissionCommand::serialize_command() {
+    nlohmann::json j;
+    j["username"] = _username;
+    j["database_name"] = _database_name;
+    j["permissions"] = _permissions;
+    return j.dump();
+}
+
+AlterUserAddPermissionCommand AlterUserAddPermissionCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterUserAddPermissionCommand(json["username"], json["database_name"],
+                                         json["permissions"].get<std::vector<std::string>>());
+}
+
+nlohmann::json AlterUserAddPermissionCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Permissions added to user " + _username;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterGroupAddPermissionCommand ====================
+
+AlterGroupAddPermissionCommand::AlterGroupAddPermissionCommand(const std::string &group_name,
+                                                               const std::vector<std::string> &permissions)
+    : _group_name(group_name), _permissions(permissions) {
+}
+
+nlohmann::json AlterGroupAddPermissionCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterGroupAddPermissionCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterGroupAddPermissionCommand::serialize_command() {
+    nlohmann::json j;
+    j["group_name"] = _group_name;
+    j["permissions"] = _permissions;
+    return j.dump();
+}
+
+AlterGroupAddPermissionCommand AlterGroupAddPermissionCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterGroupAddPermissionCommand(json["group_name"],
+                                          json["permissions"].get<std::vector<std::string>>());
+}
+
+nlohmann::json AlterGroupAddPermissionCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Permissions added to group " + _group_name;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterGroupDeletePermissionCommand ====================
+
+AlterGroupDeletePermissionCommand::AlterGroupDeletePermissionCommand(const std::string &group_name,
+                                                                     const std::vector<std::string> &permissions)
+    : _group_name(group_name), _permissions(permissions) {
+}
+
+nlohmann::json AlterGroupDeletePermissionCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterGroupDeletePermissionCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterGroupDeletePermissionCommand::serialize_command() {
+    nlohmann::json j;
+    j["group_name"] = _group_name;
+    j["permissions"] = _permissions;
+    return j.dump();
+}
+
+AlterGroupDeletePermissionCommand AlterGroupDeletePermissionCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterGroupDeletePermissionCommand(json["group_name"],
+                                             json["permissions"].get<std::vector<std::string>>());
+}
+
+nlohmann::json AlterGroupDeletePermissionCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Permissions deleted from group " + _group_name;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterDatabaseAddGroupCommand ====================
+
+AlterDatabaseAddGroupCommand::AlterDatabaseAddGroupCommand(const std::string &database_name,
+                                                           const std::string &group_name)
+    : _database_name(database_name), _group_name(group_name) {
+}
+
+nlohmann::json AlterDatabaseAddGroupCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterDatabaseAddGroupCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterDatabaseAddGroupCommand::serialize_command() {
+    nlohmann::json j;
+    j["database_name"] = _database_name;
+    j["group_name"] = _group_name;
+    return j.dump();
+}
+
+AlterDatabaseAddGroupCommand AlterDatabaseAddGroupCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterDatabaseAddGroupCommand(json["database_name"], json["group_name"]);
+}
+
+nlohmann::json AlterDatabaseAddGroupCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Group " + _group_name + " added to database " + _database_name;
+    response["Status"] = 200;
+    return response;
+}
+
+// ==================== AlterDatabaseRemoveGroupCommand ====================
+
+AlterDatabaseRemoveGroupCommand::AlterDatabaseRemoveGroupCommand(const std::string &database_name,
+                                                                 const std::string &group_name)
+    : _database_name(database_name), _group_name(group_name) {
+}
+
+nlohmann::json AlterDatabaseRemoveGroupCommand::process_command() {
+    nlohmann::json response;
+    response["Message"] = "AlterDatabaseRemoveGroupCommand not implemented yet";
+    response["Status"] = 501;
+    return response;
+}
+
+std::string AlterDatabaseRemoveGroupCommand::serialize_command() {
+    nlohmann::json j;
+    j["database_name"] = _database_name;
+    j["group_name"] = _group_name;
+    return j.dump();
+}
+
+AlterDatabaseRemoveGroupCommand AlterDatabaseRemoveGroupCommand::parse_from_bytes(const std::string &bytes) {
+    auto json = nlohmann::json::parse(bytes);
+    return AlterDatabaseRemoveGroupCommand(json["database_name"], json["group_name"]);
+}
+
+nlohmann::json AlterDatabaseRemoveGroupCommand::get_success_message() const {
+    nlohmann::json response;
+    response["Message"] = "Group " + _group_name + " removed from database " + _database_name;
     response["Status"] = 200;
     return response;
 }

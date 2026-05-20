@@ -19,6 +19,15 @@ enum class CommandType {
     Update,
     DeleteFrom,
     Select,
+    CreateUser,
+    Auth,
+    AlterUserAddToGroup,
+    AlterUserRemoveFromGroup,
+    AlterUserAddPermission,
+    AlterGroupAddPermission,
+    AlterGroupDeletePermission,
+    AlterDatabaseAddGroup,
+    AlterDatabaseRemoveGroup,
 };
 
 /* helper функции для правильной сериализации данных */
@@ -69,12 +78,13 @@ protected:
 
 class CreateDatabaseCommand : public Command {
     std::string _database_name;
+    std::vector<std::string> _group_names;
 
 protected:
     nlohmann::json get_success_message() const override;
 
 public:
-    explicit CreateDatabaseCommand(const std::string &database_name);
+    explicit CreateDatabaseCommand(const std::string &database_name, const std::vector<std::string> &group_names = {});
 
     nlohmann::json process_command() override;
 
@@ -284,6 +294,185 @@ public:
     std::string serialize_command() override;
 
     static SelectCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== CreateUserCommand ====================
+
+class CreateUserCommand : public Command {
+    std::string _username;
+    std::string _password;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    CreateUserCommand(const std::string &username, const std::string &password);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static CreateUserCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AuthCommand ====================
+
+class AuthCommand : public Command {
+    std::string _username;
+    std::string _password;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AuthCommand(const std::string &username, const std::string &password);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AuthCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterUserAddToGroupCommand ====================
+
+class AlterUserAddToGroupCommand : public Command {
+    std::string _username;
+    std::string _database_name;
+    std::string _group_name;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterUserAddToGroupCommand(const std::string &username, const std::string &database_name,
+                               const std::string &group_name);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterUserAddToGroupCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterUserRemoveFromGroupCommand ====================
+
+class AlterUserRemoveFromGroupCommand : public Command {
+    std::string _username;
+    std::string _database_name;
+    std::string _group_name;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterUserRemoveFromGroupCommand(const std::string &username, const std::string &database_name,
+                                    const std::string &group_name);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterUserRemoveFromGroupCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterUserAddPermissionCommand ====================
+
+class AlterUserAddPermissionCommand : public Command {
+    std::string _username;
+    std::string _database_name;
+    std::vector<std::string> _permissions;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterUserAddPermissionCommand(const std::string &username, const std::string &database_name,
+                                  const std::vector<std::string> &permissions);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterUserAddPermissionCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterGroupAddPermissionCommand ====================
+
+class AlterGroupAddPermissionCommand : public Command {
+    std::string _group_name;
+    std::vector<std::string> _permissions;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterGroupAddPermissionCommand(const std::string &group_name,
+                                   const std::vector<std::string> &permissions);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterGroupAddPermissionCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterGroupDeletePermissionCommand ====================
+
+class AlterGroupDeletePermissionCommand : public Command {
+    std::string _group_name;
+    std::vector<std::string> _permissions;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterGroupDeletePermissionCommand(const std::string &group_name,
+                                      const std::vector<std::string> &permissions);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterGroupDeletePermissionCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterDatabaseAddGroupCommand ====================
+
+class AlterDatabaseAddGroupCommand : public Command {
+    std::string _database_name;
+    std::string _group_name;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterDatabaseAddGroupCommand(const std::string &database_name, const std::string &group_name);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterDatabaseAddGroupCommand parse_from_bytes(const std::string &bytes);
+};
+
+// ==================== AlterDatabaseRemoveGroupCommand ====================
+
+class AlterDatabaseRemoveGroupCommand : public Command {
+    std::string _database_name;
+    std::string _group_name;
+
+protected:
+    nlohmann::json get_success_message() const override;
+
+public:
+    AlterDatabaseRemoveGroupCommand(const std::string &database_name, const std::string &group_name);
+
+    nlohmann::json process_command() override;
+
+    std::string serialize_command() override;
+
+    static AlterDatabaseRemoveGroupCommand parse_from_bytes(const std::string &bytes);
 };
 
 #endif //MINIDB_COMMAND_H

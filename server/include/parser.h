@@ -42,6 +42,12 @@ private:
     std::unique_ptr<Command> parse_update();
     std::unique_ptr<Command> parse_delete_from();
     std::unique_ptr<Command> parse_select();
+    std::unique_ptr<Command> parse_create_user();
+    std::unique_ptr<Command> parse_auth();
+    std::unique_ptr<Command> parse_alter();
+    std::unique_ptr<Command> parse_alter_user();
+    std::unique_ptr<Command> parse_alter_group();
+    std::unique_ptr<Command> parse_alter_database();
 
     std::unique_ptr<Condition> parse_condition();
     std::unique_ptr<Condition> parse_or_expression();
