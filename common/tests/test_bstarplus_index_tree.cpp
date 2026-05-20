@@ -61,14 +61,12 @@ std::vector<db::RecordId> make_records(const std::vector<db::IndexKey>& keys) {
 
 db::IndexNode make_leaf(
     const db::PageId page_id,
-    const db::PageId parent_page_id,
     const db::PageId next_leaf_page_id,
     const std::vector<db::IndexKey>& keys
 ) {
     db::IndexNode node;
     node.is_leaf = true;
     node.page_id = page_id;
-    node.parent_page_id = parent_page_id;
     node.next_leaf_page_id = next_leaf_page_id;
     node.keys = keys;
     node.records = make_records(keys);
@@ -77,14 +75,12 @@ db::IndexNode make_leaf(
 
 db::IndexNode make_internal(
     const db::PageId page_id,
-    const db::PageId parent_page_id,
     const std::vector<db::IndexKey>& keys,
     const std::vector<db::PageId>& children
 ) {
     db::IndexNode node;
     node.is_leaf = false;
     node.page_id = page_id;
-    node.parent_page_id = parent_page_id;
     node.keys = keys;
     node.children = children;
     return node;
@@ -164,7 +160,6 @@ int main() {
     db::IndexNode left_leaf;
     left_leaf.is_leaf = true;
     left_leaf.page_id = left_leaf_page_id;
-    left_leaf.parent_page_id = internal_root_page_id;
     left_leaf.next_leaf_page_id = right_leaf_page_id;
     left_leaf.keys = {10, 20};
     left_leaf.records = {db::RecordId{100, 1}, db::RecordId{100, 2}};
@@ -172,7 +167,6 @@ int main() {
     db::IndexNode right_leaf;
     right_leaf.is_leaf = true;
     right_leaf.page_id = right_leaf_page_id;
-    right_leaf.parent_page_id = internal_root_page_id;
     right_leaf.keys = {60, 80};
     right_leaf.records = {db::RecordId{200, 1}, db::RecordId{200, 2}};
 
@@ -273,11 +267,10 @@ int main() {
         test_min_leaf_keys + 1
     );
 
-    auto borrow_left = make_leaf(borrow_left_page_id, borrow_root_page_id, borrow_right_page_id, borrow_left_keys);
-    auto borrow_right = make_leaf(borrow_right_page_id, borrow_root_page_id, db::INVALID_PAGE_ID, borrow_right_keys);
+    auto borrow_left = make_leaf(borrow_left_page_id, borrow_right_page_id, borrow_left_keys);
+    auto borrow_right = make_leaf(borrow_right_page_id, db::INVALID_PAGE_ID, borrow_right_keys);
     auto borrow_root = make_internal(
         borrow_root_page_id,
-        db::INVALID_PAGE_ID,
         {borrow_right_keys.front()},
         {borrow_left_page_id, borrow_right_page_id}
     );
@@ -322,11 +315,10 @@ int main() {
         2
     );
 
-    auto merge_left = make_leaf(merge_left_page_id, merge_root_page_id, merge_right_page_id, merge_left_keys);
-    auto merge_right = make_leaf(merge_right_page_id, merge_root_page_id, db::INVALID_PAGE_ID, merge_right_keys);
+    auto merge_left = make_leaf(merge_left_page_id, merge_right_page_id, merge_left_keys);
+    auto merge_right = make_leaf(merge_right_page_id, db::INVALID_PAGE_ID, merge_right_keys);
     auto merge_root = make_internal(
         merge_root_page_id,
-        db::INVALID_PAGE_ID,
         {merge_right_keys.front()},
         {merge_left_page_id, merge_right_page_id}
     );
@@ -373,26 +365,25 @@ int main() {
 
     recursive_page_manager.write_page(
         leaf_a_page_id,
-        db::serialize_node(make_leaf(leaf_a_page_id, recursive_left_internal_page_id, leaf_b_page_id, leaf_a_keys))
+        db::serialize_node(make_leaf(leaf_a_page_id, leaf_b_page_id, leaf_a_keys))
     );
     recursive_page_manager.write_page(
         leaf_b_page_id,
-        db::serialize_node(make_leaf(leaf_b_page_id, recursive_left_internal_page_id, leaf_c_page_id, leaf_b_keys))
+        db::serialize_node(make_leaf(leaf_b_page_id, leaf_c_page_id, leaf_b_keys))
     );
     recursive_page_manager.write_page(
         leaf_c_page_id,
-        db::serialize_node(make_leaf(leaf_c_page_id, recursive_right_internal_page_id, leaf_d_page_id, leaf_c_keys))
+        db::serialize_node(make_leaf(leaf_c_page_id, leaf_d_page_id, leaf_c_keys))
     );
     recursive_page_manager.write_page(
         leaf_d_page_id,
-        db::serialize_node(make_leaf(leaf_d_page_id, recursive_right_internal_page_id, db::INVALID_PAGE_ID, leaf_d_keys))
+        db::serialize_node(make_leaf(leaf_d_page_id, db::INVALID_PAGE_ID, leaf_d_keys))
     );
 
     recursive_page_manager.write_page(
         recursive_left_internal_page_id,
         db::serialize_node(make_internal(
             recursive_left_internal_page_id,
-            recursive_root_page_id,
             {leaf_b_keys.front()},
             {leaf_a_page_id, leaf_b_page_id}
         ))
@@ -401,7 +392,6 @@ int main() {
         recursive_right_internal_page_id,
         db::serialize_node(make_internal(
             recursive_right_internal_page_id,
-            recursive_root_page_id,
             {leaf_d_keys.front()},
             {leaf_c_page_id, leaf_d_page_id}
         ))
@@ -410,7 +400,6 @@ int main() {
         recursive_root_page_id,
         db::serialize_node(make_internal(
             recursive_root_page_id,
-            db::INVALID_PAGE_ID,
             {leaf_c_keys.front()},
             {recursive_left_internal_page_id, recursive_right_internal_page_id}
         ))

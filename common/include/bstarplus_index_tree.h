@@ -24,7 +24,6 @@ namespace db {
         sizeof(std::uint8_t)  + // node_type
         sizeof(std::uint8_t)  + // reserved
         sizeof(PageId)        + // page_id
-        sizeof(PageId)        + // parent_page_id
         sizeof(PageId)        + // next_leaf_page_id
         sizeof(std::uint32_t) + // key_count
         sizeof(std::uint32_t);  // payload_count
@@ -39,7 +38,6 @@ namespace db {
     struct IndexNode {
         bool is_leaf = true;
         PageId page_id = INVALID_PAGE_ID;
-        PageId parent_page_id = INVALID_PAGE_ID;
         PageId next_leaf_page_id = INVALID_PAGE_ID;
         std::vector<IndexKey> keys;
         std::vector<PageId> children; // instead of a pointer to children, we use PageId as the address of their location
@@ -111,7 +109,6 @@ namespace db {
         void split_internal_pair(IndexNode& left, IndexNode& right, IndexNode& parent, std::size_t parent_index,
                                  const std::vector<PageId>& parent_path);
         void split_internal(IndexNode& node, const std::vector<PageId>& path);
-        void update_children_parent(const IndexNode& node);
         void fix_leaf_underflow(IndexNode& leaf, const std::vector<PageId>& path);
         void fix_internal_underflow(IndexNode& node, const std::vector<PageId>& path);
         void handle_internal_after_child_removed(IndexNode& node, const std::vector<PageId>& path);

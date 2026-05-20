@@ -131,7 +131,6 @@ namespace db {
         write_scalar(page, offset, node_type);
         write_scalar(page, offset, reserved);
         write_scalar(page, offset, node.page_id);
-        write_scalar(page, offset, node.parent_page_id);
         write_scalar(page, offset, node.next_leaf_page_id);
         write_scalar(page, offset, key_count);
         write_scalar(page, offset, payload_count);
@@ -181,7 +180,6 @@ namespace db {
         IndexNode node;
         node.is_leaf = node_type == LEAF_NODE_TYPE;
         node.page_id = read_scalar<PageId>(data, offset);
-        node.parent_page_id = read_scalar<PageId>(data, offset);
         node.next_leaf_page_id = read_scalar<PageId>(data, offset);
 
         const auto key_count = read_scalar<std::uint32_t>(data, offset);
@@ -254,20 +252,6 @@ namespace db {
             return true;
         } catch (const std::length_error&) {
             return false;
-        }
-    }
-
-    void BStarPlusIndex::update_children_parent(const IndexNode& node) {
-        if (node.is_leaf) {
-            return;
-        }
-
-        for (const auto child_page_id : node.children) {
-            auto child = read_node(child_page_id);
-            if (child.parent_page_id != node.page_id) {
-                child.parent_page_id = node.page_id;
-                write_node(child);
-            }
         }
     }
 
@@ -356,8 +340,6 @@ namespace db {
         }
 
         auto child = read_node(root.children.front());
-        child.parent_page_id = INVALID_PAGE_ID;
-        write_node(child);
 
         _metadata.root_page_id = child.page_id;
         if (_metadata.height > 1) {
@@ -405,12 +387,8 @@ namespace db {
             IndexNode new_root;
             new_root.is_leaf = false;
             new_root.page_id = new_root_page_id;
-            new_root.parent_page_id = INVALID_PAGE_ID;
             new_root.keys = {separator};
             new_root.children = {left.page_id, right.page_id};
-
-            left.parent_page_id = new_root_page_id;
-            right.parent_page_id = new_root_page_id;
 
             write_node(left);
             write_node(right);
@@ -436,8 +414,6 @@ namespace db {
         parent.keys.insert(parent.keys.begin() + static_cast<std::ptrdiff_t>(child_index), separator);
         parent.children.insert(parent.children.begin() + static_cast<std::ptrdiff_t>(child_index + 1), right.page_id);
 
-        left.parent_page_id = parent.page_id;
-        right.parent_page_id = parent.page_id;
         write_node(left);
         write_node(right);
         rebuild_internal_keys(parent);
@@ -507,7 +483,6 @@ namespace db {
         IndexNode right;
         right.is_leaf = true;
         right.page_id = right_page_id;
-        right.parent_page_id = leaf.parent_page_id;
         right.next_leaf_page_id = leaf.next_leaf_page_id;
 
         const auto split_index = leaf.keys.size() / 2;
@@ -639,8 +614,6 @@ namespace db {
         }
 
         left.next_leaf_page_id = right.page_id;
-        right.parent_page_id = parent.page_id;
-        left.parent_page_id = parent.page_id;
 
         write_node(left);
         write_node(right);
@@ -674,7 +647,6 @@ namespace db {
         IndexNode middle;
         middle.is_leaf = true;
         middle.page_id = middle_page_id;
-        middle.parent_page_id = parent.page_id;
         middle.next_leaf_page_id = right.page_id;
 
         const auto counts = three_way_counts(items.size());
@@ -706,8 +678,6 @@ namespace db {
 
         left.next_leaf_page_id = middle.page_id;
         middle.next_leaf_page_id = right.page_id;
-        left.parent_page_id = parent.page_id;
-        right.parent_page_id = parent.page_id;
 
         write_node(left);
         write_node(middle);
@@ -738,11 +708,7 @@ namespace db {
         const auto left_count = (children.size() + 1) / 2;
         left.children.assign(children.begin(), children.begin() + static_cast<std::ptrdiff_t>(left_count));
         right.children.assign(children.begin() + static_cast<std::ptrdiff_t>(left_count), children.end());
-        left.parent_page_id = parent.page_id;
-        right.parent_page_id = parent.page_id;
 
-        update_children_parent(left);
-        update_children_parent(right);
         rebuild_internal_keys(left);
         rebuild_internal_keys(right);
 
@@ -810,7 +776,6 @@ namespace db {
         IndexNode middle;
         middle.is_leaf = false;
         middle.page_id = middle_page_id;
-        middle.parent_page_id = parent.page_id;
 
         const auto counts = three_way_counts(children.size());
         const auto first_end = counts[0];
@@ -823,12 +788,6 @@ namespace db {
         );
         right.children.assign(children.begin() + static_cast<std::ptrdiff_t>(second_end), children.end());
 
-        left.parent_page_id = parent.page_id;
-        right.parent_page_id = parent.page_id;
-
-        update_children_parent(left);
-        update_children_parent(middle);
-        update_children_parent(right);
         rebuild_internal_keys(left);
         rebuild_internal_keys(middle);
         rebuild_internal_keys(right);
@@ -906,12 +865,10 @@ namespace db {
         IndexNode right;
         right.is_leaf = false;
         right.page_id = right_page_id;
-        right.parent_page_id = node.parent_page_id;
         right.children.assign(node.children.begin() + static_cast<std::ptrdiff_t>(split_index), node.children.end());
 
         node.children.erase(node.children.begin() + static_cast<std::ptrdiff_t>(split_index), node.children.end());
 
-        update_children_parent(right);
         rebuild_internal_keys(node);
         rebuild_internal_keys(right);
 
@@ -1117,10 +1074,6 @@ namespace db {
                 left.children.pop_back();
                 node.children.insert(node.children.begin(), moved_child_page_id);
 
-                auto moved_child = read_node(moved_child_page_id);
-                moved_child.parent_page_id = node.page_id;
-                write_node(moved_child);
-
                 rebuild_internal_keys(left);
                 rebuild_internal_keys(node);
                 write_node(left);
@@ -1142,10 +1095,6 @@ namespace db {
                 const auto moved_child_page_id = right.children.front();
                 right.children.erase(right.children.begin());
                 node.children.push_back(moved_child_page_id);
-
-                auto moved_child = read_node(moved_child_page_id);
-                moved_child.parent_page_id = node.page_id;
-                write_node(moved_child);
 
                 rebuild_internal_keys(node);
                 rebuild_internal_keys(right);
@@ -1173,9 +1122,6 @@ namespace db {
             }
 
             for (const auto child_page_id : node.children) {
-                auto child = read_node(child_page_id);
-                child.parent_page_id = left.page_id;
-                write_node(child);
                 left.children.push_back(child_page_id);
             }
 
@@ -1203,9 +1149,6 @@ namespace db {
         }
 
         for (const auto child_page_id : right.children) {
-            auto child = read_node(child_page_id);
-            child.parent_page_id = node.page_id;
-            write_node(child);
             node.children.push_back(child_page_id);
         }
 
@@ -1224,7 +1167,6 @@ namespace db {
             IndexNode root;
             root.is_leaf = true;
             root.page_id = root_page_id;
-            root.parent_page_id = INVALID_PAGE_ID;
             root.next_leaf_page_id = INVALID_PAGE_ID;
             root.keys.push_back(key);
             root.records.push_back(record);
