@@ -9,6 +9,7 @@
 #include <queue>
 #include <boost/process/v1/child.hpp>
 #include <boost/asio.hpp>
+#include <boost/asio/deadline_timer.hpp>
 #include <boost/uuid.hpp>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -43,6 +44,12 @@ class Entrypoint {
     std::map<AsioSocketPtr, bool> _storage_nodes_busy; /* сокет:индикатор_занятости */
     std::map<AsioSocketPtr, BoostProcessPtr> _storage_nodes_process; /* сокет:pid_процесса */
 
+    /* heartbeat */
+    boost::asio::ip::tcp::acceptor _heartbeat_acceptor;
+    std::map<AsioSocketPtr, AsioSocketPtr> _storage_heartbeat_sockets; /* main_socket -> heartbeat_socket */
+    boost::asio::deadline_timer _heartbeat_timer;
+    std::queue<BoostProcessPtr> _pending_processes;
+
     std::thread _worker_thread;
 
     std::queue<Task> _task_queue;
@@ -66,6 +73,21 @@ class Entrypoint {
     void async_send_next_task(const AsioSocketPtr &socket);
 
     void async_send_task(const AsioSocketPtr &socket, Task &&task);
+
+    /* heartbeat */
+    void start_heartbeat_accept();
+
+    void handle_heartbeat_accept(const AsioSocketPtr &heartbeat_socket);
+
+    void start_heartbeat_timer();
+
+    void check_heartbeats();
+
+    void async_send_heartbeat_ping(const AsioSocketPtr &socket, const AsioSocketPtr &heartbeat_socket);
+
+    void async_read_heartbeat_response(const AsioSocketPtr &socket, const AsioSocketPtr &heartbeat_socket);
+
+    void restart_storage_node(const AsioSocketPtr &socket);
 
     void shutdown();
 

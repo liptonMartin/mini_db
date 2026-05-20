@@ -4,13 +4,15 @@
 
 
 #include <iostream>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/process/v1/child.hpp>
 
 #include "entrypoint.h"
 #include "exceptions.h"
 
 Entrypoint::Entrypoint(const int count_storage_nodes)
-    : _work_guard(boost::asio::make_work_guard(_io_context)), _acceptor(_io_context) {
+    : _work_guard(boost::asio::make_work_guard(_io_context)), _acceptor(_io_context),
+      _heartbeat_acceptor(_io_context), _heartbeat_timer(_io_context) {
     if (
         count_storage_nodes < entrypoint::MIN_COUNT_STORAGE_NODES
         || count_storage_nodes > entrypoint::MAX_COUNT_STORAGE_NODES) {
@@ -28,11 +30,20 @@ Entrypoint::Entrypoint(const int count_storage_nodes)
 
     _logger->info("Starting acceptor");
 
+    /* heartbeat acceptor */
+    const boost::asio::ip::tcp::endpoint heartbeat_endpoint(boost::asio::ip::address_v4::loopback(), entrypoint::HEARTBEAT_PORT);
+    _heartbeat_acceptor.open(heartbeat_endpoint.protocol());
+    _heartbeat_acceptor.bind(heartbeat_endpoint);
+    _heartbeat_acceptor.listen();
+
+    _logger->info("Starting heartbeat acceptor");
+
     _worker_thread = std::thread([this, count_storage_nodes] {
         for (int i = 0; i < count_storage_nodes; i++) {
             add_storage_node();
         }
 
+        start_heartbeat_timer();
         _io_context.run();
     });
 }
@@ -45,7 +56,9 @@ void Entrypoint::add_storage_node() {
 
         _logger->info("Starting new process with PID {}", child_process_ptr->id());
 
+        _pending_processes.push(child_process_ptr);
         start_accept(child_process_ptr);
+        start_heartbeat_accept();
     } catch (const std::system_error &e) {
         std::cout << e.what() << "\n";
     }
@@ -61,6 +74,14 @@ void Entrypoint::remove_storage_node(const AsioSocketPtr &socket) {
 
     child_process->terminate();
     child_process->wait();
+
+    /* удаляем heartbeat сокет */
+    const auto heartbeat_it = _storage_heartbeat_sockets.find(socket);
+    if (heartbeat_it != _storage_heartbeat_sockets.end()) {
+        boost::system::error_code ec;
+        heartbeat_it->second->close(ec);
+        _storage_heartbeat_sockets.erase(heartbeat_it);
+    }
 
     /* удаляем из maps */
     _storage_nodes_busy.erase(socket);
@@ -91,6 +112,150 @@ void Entrypoint::handle_new_connection(const AsioSocketPtr &socket, const BoostP
     _storage_nodes_process[socket] = child_process_ptr;
 
     async_send_next_task(socket);
+}
+
+/* ==================== Heartbeat ==================== */
+
+void Entrypoint::start_heartbeat_accept() {
+    auto heartbeat_socket = std::make_shared<AsioSocket>(_io_context);
+
+    _heartbeat_acceptor.async_accept(
+        *heartbeat_socket,
+        [this, heartbeat_socket](const boost::system::error_code &error) {
+            if (error) {
+                _logger->error("Heartbeat accept error: {}", error.message());
+                return;
+            }
+
+            handle_heartbeat_accept(heartbeat_socket);
+        }
+    );
+}
+
+void Entrypoint::handle_heartbeat_accept(const AsioSocketPtr &heartbeat_socket) {
+    if (!_pending_processes.empty()) {
+        _logger->info("Heartbeat connection accepted");
+        auto child_process_ptr = _pending_processes.front();
+        _pending_processes.pop();
+
+        for (const auto &[main_socket, process]: _storage_nodes_process) {
+            if (process == child_process_ptr) {
+                _storage_heartbeat_sockets[main_socket] = heartbeat_socket;
+                break;
+            }
+        }
+
+        start_heartbeat_accept();
+    } else {
+        _logger->warn("Heartbeat connection with no pending process, closing");
+        boost::system::error_code ec;
+        heartbeat_socket->close(ec);
+        start_heartbeat_accept();
+    }
+}
+
+void Entrypoint::start_heartbeat_timer() {
+    _heartbeat_timer.expires_from_now(boost::posix_time::seconds(60));
+    _heartbeat_timer.async_wait([this](const boost::system::error_code &ec) {
+        if (ec) {
+            if (ec != boost::asio::error::operation_aborted) {
+                _logger->error("Heartbeat timer error: {}", ec.message());
+            }
+            return;
+        }
+
+        check_heartbeats();
+        start_heartbeat_timer();
+    });
+}
+
+void Entrypoint::check_heartbeats() {
+    _logger->info("Checking heartbeats for {} storage nodes", _storage_heartbeat_sockets.size());
+    for (const auto &[socket, heartbeat_socket]: _storage_heartbeat_sockets) {
+        if (!_storage_nodes_busy[socket]) {
+            async_send_heartbeat_ping(socket, heartbeat_socket);
+        }
+    }
+}
+
+void Entrypoint::async_send_heartbeat_ping(const AsioSocketPtr &socket, const AsioSocketPtr &heartbeat_socket) {
+    CommandType heartbeat_type = CommandType::Heartbeat;
+
+    auto buffer = std::make_shared<std::vector<uint8_t>>();
+    buffer->resize(sizeof(heartbeat_type));
+    memcpy(buffer->data(), &heartbeat_type, sizeof(heartbeat_type));
+
+    boost::asio::async_write(
+        *heartbeat_socket,
+        boost::asio::buffer(buffer->data(), buffer->size()),
+        [this, socket, heartbeat_socket](const boost::system::error_code &ec, size_t) {
+            if (ec) {
+                _logger->error("Heartbeat ping write error: {}", ec.message());
+                restart_storage_node(socket);
+                return;
+            }
+
+            async_read_heartbeat_response(socket, heartbeat_socket);
+        }
+    );
+}
+
+void Entrypoint::async_read_heartbeat_response(const AsioSocketPtr &socket, const AsioSocketPtr &heartbeat_socket) {
+    auto length_data = std::make_shared<uint32_t>();
+
+    boost::asio::async_read(
+        *heartbeat_socket,
+        boost::asio::buffer(length_data.get(), sizeof(*length_data)),
+        [this, socket, heartbeat_socket, length_data](const boost::system::error_code &ec, std::size_t) {
+            if (ec) {
+                _logger->error("Heartbeat response read error: {}", ec.message());
+                restart_storage_node(socket);
+                return;
+            }
+
+            auto buffer = std::make_shared<std::vector<uint8_t>>();
+            buffer->resize(*length_data);
+
+            boost::asio::async_read(
+                *heartbeat_socket,
+                boost::asio::buffer(buffer->data(), *length_data),
+                [this, socket, buffer](const boost::system::error_code &ec, std::size_t) {
+                    if (ec) {
+                        _logger->error("Heartbeat response body read error: {}", ec.message());
+                        restart_storage_node(socket);
+                        return;
+                    }
+
+                    try {
+                        auto response = nlohmann::json::parse(*buffer);
+                        if (response.contains("Message") && response["Message"] == "alive") {
+                            _logger->info("Heartbeat OK for storage node");
+                        } else {
+                            _logger->warn("Unexpected heartbeat response: {}", response.dump());
+                        }
+                    } catch (...) {
+                        _logger->error("Failed to parse heartbeat response");
+                    }
+                }
+            );
+        }
+    );
+}
+
+void Entrypoint::restart_storage_node(const AsioSocketPtr &socket) {
+    _logger->info("Restarting storage node");
+
+    const auto heartbeat_it = _storage_heartbeat_sockets.find(socket);
+    if (heartbeat_it != _storage_heartbeat_sockets.end()) {
+        boost::system::error_code ec;
+        heartbeat_it->second->close(ec);
+        _storage_heartbeat_sockets.erase(heartbeat_it);
+    }
+
+    _storage_nodes_busy.erase(socket);
+    _storage_nodes_process.erase(socket);
+
+    add_storage_node();
 }
 
 
@@ -230,7 +395,18 @@ void Entrypoint::shutdown() {
         }
     }
 
+    for (auto &[main_socket, heartbeat_socket]: _storage_heartbeat_sockets) {
+        boost::system::error_code ec;
+        heartbeat_socket->close(ec);
+    }
+    _storage_heartbeat_sockets.clear();
+
     boost::system::error_code ec;
+    _heartbeat_acceptor.close(ec);
+    if (ec) {
+        _logger->error("Error while closing heartbeat acceptor: {}", ec.message());
+    }
+
     _acceptor.close(ec);
     if (ec) {
         _logger->error("Error while closing acceptor: {}", ec.message());

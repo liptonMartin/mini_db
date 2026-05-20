@@ -15,6 +15,7 @@
 class StorageNode {
     boost::asio::io_context _io_context;
     boost::asio::ip::tcp::socket _server_socket;
+    boost::asio::ip::tcp::socket _heartbeat_socket;
 
     std::shared_ptr<spdlog::logger> _logger;
 
@@ -117,6 +118,10 @@ class StorageNode {
             case CommandType::Select:
                 command = std::make_unique<SelectCommand>(SelectCommand::parse_from_bytes(*data));
                 break;
+            case CommandType::Heartbeat:
+                response["Status"] = 200;
+                response["Message"] = "alive";
+                break;
         }
 
         if (command) {
@@ -154,7 +159,7 @@ class StorageNode {
     }
 
 public:
-    explicit StorageNode() : _server_socket(_io_context) {
+    explicit StorageNode() : _server_socket(_io_context), _heartbeat_socket(_io_context) {
         const auto pid = GetCurrentProcessId();
         const auto logger_name = "storage node (" + std::to_string(pid) + ")";
 
@@ -169,7 +174,46 @@ public:
 
         start_listen_server();
 
+        const boost::asio::ip::tcp::endpoint heartbeat_endpoint(boost::asio::ip::address_v4::loopback(), entrypoint::HEARTBEAT_PORT);
+
+        _heartbeat_socket.connect(heartbeat_endpoint);
+        _logger->info("Connect to heartbeat!");
+
+        start_listen_heartbeat();
+
         _io_context.run();
+    }
+
+    void start_listen_heartbeat() {
+        auto command_type = std::make_shared<CommandType>();
+        boost::asio::async_read(
+            _heartbeat_socket,
+            boost::asio::buffer(command_type.get(), sizeof(*command_type)),
+            [this, command_type](const boost::system::error_code& ec, std::size_t) {
+                if (!ec) {
+                    send_heartbeat_response();
+                }
+            }
+        );
+    }
+
+    void send_heartbeat_response() {
+        nlohmann::json response{{"Status", 200}, {"Message", "alive"}};
+        auto raw = response.dump();
+        uint32_t len = raw.size();
+
+        auto buffer = std::make_shared<std::vector<uint8_t>>();
+        buffer->resize(sizeof(len) + len);
+        memcpy(buffer->data(), &len, sizeof(len));
+        memcpy(buffer->data() + sizeof(len), raw.data(), len);
+
+        boost::asio::async_write(
+            _heartbeat_socket,
+            boost::asio::buffer(buffer->data(), buffer->size()),
+            [this](auto, auto) {
+                start_listen_heartbeat();
+            }
+        );
     }
 
     ~StorageNode() {
@@ -178,7 +222,12 @@ public:
         boost::system::error_code ec;
         _server_socket.close(ec);
         if (ec) {
-            _logger->error("Error while closing socket: {}", ec.message());
+            _logger->error("Error while closing server socket: {}", ec.message());
+        }
+
+        _heartbeat_socket.close(ec);
+        if (ec) {
+            _logger->error("Error while closing heartbeat socket: {}", ec.message());
         }
     }
 };

@@ -19,6 +19,7 @@ enum class CommandType {
     Update,
     DeleteFrom,
     Select,
+    Heartbeat,
     CreateUser,
     Auth,
     AlterUserAddToGroup,
