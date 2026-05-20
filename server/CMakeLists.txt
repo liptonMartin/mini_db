@@ -40,7 +40,7 @@ target_link_libraries(
         common
 )
 target_link_libraries(
-        server
+        main_server
         PUBLIC
         server
 )

@@ -27,6 +27,9 @@ target_link_libraries(
         common
         gtest
 )
+target_include_directories(
+        test_table
+        PRIVATE
         ../include
 )
 
