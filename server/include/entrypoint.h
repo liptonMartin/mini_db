@@ -47,8 +47,8 @@ class Entrypoint {
     /* heartbeat */
     boost::asio::ip::tcp::acceptor _heartbeat_acceptor;
     std::map<AsioSocketPtr, AsioSocketPtr> _storage_heartbeat_sockets; /* main_socket -> heartbeat_socket */
+    std::map<BoostProcessPtr, AsioSocketPtr> _pending_heartbeat_sockets; /* process -> heartbeat_socket (до main-connection) */
     boost::asio::deadline_timer _heartbeat_timer;
-    std::queue<BoostProcessPtr> _pending_processes;
 
     std::thread _worker_thread;
 
@@ -75,9 +75,9 @@ class Entrypoint {
     void async_send_task(const AsioSocketPtr &socket, Task &&task);
 
     /* heartbeat */
-    void start_heartbeat_accept();
+    void start_heartbeat_accept(const BoostProcessPtr &child_process_ptr);
 
-    void handle_heartbeat_accept(const AsioSocketPtr &heartbeat_socket);
+    void handle_heartbeat_accept(const AsioSocketPtr &heartbeat_socket, const BoostProcessPtr &child_process_ptr);
 
     void start_heartbeat_timer();
 

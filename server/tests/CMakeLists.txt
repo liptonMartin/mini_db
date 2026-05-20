@@ -44,7 +44,7 @@ target_link_libraries(
 
 add_executable(
         test_heartbit
-        test_heartbit.cpp
+        test_heartbeat.cpp
 )
 target_link_libraries(
         test_heartbit
