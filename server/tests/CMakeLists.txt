@@ -28,3 +28,14 @@ target_link_libraries(
         server
         GTest::gtest_main
 )
+
+add_executable(
+        test_heartbit
+        test_heartbit.cpp
+)
+target_link_libraries(
+        test_heartbit
+        PRIVATE
+        server
+        GTest::gtest_main
+)

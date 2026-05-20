@@ -15,6 +15,7 @@ namespace entrypoint {
 
     inline constexpr int COUNT_THREADS = 2;
     inline constexpr int SERVER_PORT = 1235;
+    inline constexpr int HEARTBEAT_PORT = 1236;
 }
 
 #endif //MINIDB_CONSTANTS_H
