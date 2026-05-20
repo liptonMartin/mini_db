@@ -3,510 +3,598 @@
 #include "parser.h"
 #include "command.h"
 
-static std::unique_ptr<Command> parse_sql(const std::string& sql) {
+using json = nlohmann::json;
+
+static json parse_to_json(const std::string& sql) {
     Lexer lexer;
     auto tokens = lexer.tokenize(sql);
-
     Parser parser;
-    return parser.parse(tokens);
+    auto cmd = parser.parse(tokens);
+    return json::parse(cmd->serialize_command());
+}
+
+static json cond(const std::string& sql) {
+    return parse_to_json(sql)["condition"];
 }
 
 // ==================== CREATE DATABASE ====================
 
 TEST(ParserTest, CreateDatabaseSimple) {
-    auto cmd = parse_sql("CREATE DATABASE my_db;");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateDatabaseCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    auto json = create_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["database_name"], "my_db");
+    auto actual = parse_to_json("CREATE DATABASE my_db;");
+    auto expected = R"({"database_name":"my_db"})"_json;
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, CreateDatabaseCaseInsensitive) {
-    auto cmd = parse_sql("CrEaTe DaTaBaSe casedb;");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateDatabaseCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    auto json = create_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["database_name"], "casedb");
-}
-
-TEST(ParserTest, CreateDatabaseWithToken) {
-    auto cmd = parse_sql("CREATE DATABASE securedb \"eyJhbGciOiJIUzI1NiJ9.abc.xyz\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateDatabaseCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    EXPECT_EQ(create_cmd->get_token(), "eyJhbGciOiJIUzI1NiJ9.abc.xyz");
-    EXPECT_FALSE(create_cmd->get_token().empty());
+    auto actual = parse_to_json("CrEaTe DaTaBaSe casedb;");
+    auto expected = R"({"database_name":"casedb"})"_json;
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== DROP DATABASE ====================
 
 TEST(ParserTest, DropDatabase) {
-    auto cmd = parse_sql("DROP DATABASE old_db;");
-    ASSERT_NE(cmd, nullptr);
-    auto* drop_cmd = dynamic_cast<DropDatabaseCommand*>(cmd.get());
-    ASSERT_NE(drop_cmd, nullptr);
-
-    auto json = drop_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["database_name"], "old_db");
-}
-
-TEST(ParserTest, DropDatabaseWithToken) {
-    auto cmd = parse_sql("DROP DATABASE old_db \"token123\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* drop_cmd = dynamic_cast<DropDatabaseCommand*>(cmd.get());
-    ASSERT_NE(drop_cmd, nullptr);
-
-    EXPECT_EQ(drop_cmd->get_token(), "token123");
+    auto actual = parse_to_json("DROP DATABASE old_db;");
+    auto expected = R"({"database_name":"old_db"})"_json;
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== USE DATABASE ====================
 
 TEST(ParserTest, UseDatabase) {
-    auto cmd = parse_sql("USE active_db;");
-    ASSERT_NE(cmd, nullptr);
-    auto* use_cmd = dynamic_cast<UseDatabaseCommand*>(cmd.get());
-    ASSERT_NE(use_cmd, nullptr);
-
-    auto json = use_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["database_name"], "active_db");
-}
-
-TEST(ParserTest, UseDatabaseWithToken) {
-    auto cmd = parse_sql("USE active_db \"jwt_use\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* use_cmd = dynamic_cast<UseDatabaseCommand*>(cmd.get());
-    ASSERT_NE(use_cmd, nullptr);
-
-    EXPECT_EQ(use_cmd->get_token(), "jwt_use");
+    auto actual = parse_to_json("USE active_db;");
+    auto expected = R"({"database_name":"active_db"})"_json;
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== CREATE TABLE ====================
 
 TEST(ParserTest, CreateTableSimple) {
-    auto cmd = parse_sql("CREATE TABLE users (id int, name string);");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateTableCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    auto json = create_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "users");
-    EXPECT_EQ(parsed["columns"].size(), 2);
+    auto actual = parse_to_json("CREATE TABLE users (id int, name string);");
+    auto expected = json{
+        {"table_name", "users"},
+        {"columns", json::array({
+            json{{"column_id", -1}, {"name", "id"}, {"type", 0}, {"is_nullable", true}, {"is_indexed", false}},
+            json{{"column_id", -1}, {"name", "name"}, {"type", 1}, {"is_nullable", true}, {"is_indexed", false}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, CreateTableWithConstraints) {
-    auto cmd = parse_sql("CREATE TABLE products (id int INDEXED, name string NOT NULL, price int);");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateTableCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    auto json = create_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "products");
-    EXPECT_EQ(parsed["columns"].size(), 3);
-}
-
-TEST(ParserTest, CreateTableWithToken) {
-    auto cmd = parse_sql("CREATE TABLE t (x int) \"table_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* create_cmd = dynamic_cast<CreateTableCommand*>(cmd.get());
-    ASSERT_NE(create_cmd, nullptr);
-
-    EXPECT_EQ(create_cmd->get_token(), "table_token");
+    auto actual = parse_to_json("CREATE TABLE products (id int INDEXED, name string NOT NULL, price int);");
+    auto expected = json{
+        {"table_name", "products"},
+        {"columns", json::array({
+            json{{"column_id", -1}, {"name", "id"}, {"type", 0}, {"is_nullable", false}, {"is_indexed", true}},
+            json{{"column_id", -1}, {"name", "name"}, {"type", 1}, {"is_nullable", false}, {"is_indexed", false}},
+            json{{"column_id", -1}, {"name", "price"}, {"type", 0}, {"is_nullable", true}, {"is_indexed", false}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== DROP TABLE ====================
 
 TEST(ParserTest, DropTable) {
-    auto cmd = parse_sql("DROP TABLE old_table;");
-    ASSERT_NE(cmd, nullptr);
-    auto* drop_cmd = dynamic_cast<DropTableCommand*>(cmd.get());
-    ASSERT_NE(drop_cmd, nullptr);
-
-    auto json = drop_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "old_table");
-}
-
-TEST(ParserTest, DropTableWithToken) {
-    auto cmd = parse_sql("DROP TABLE t \"drop_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* drop_cmd = dynamic_cast<DropTableCommand*>(cmd.get());
-    ASSERT_NE(drop_cmd, nullptr);
-
-    EXPECT_EQ(drop_cmd->get_token(), "drop_token");
+    auto actual = parse_to_json("DROP TABLE old_table;");
+    auto expected = R"({"table_name":"old_table"})"_json;
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== INSERT INTO ====================
 
 TEST(ParserTest, InsertIntoString) {
-    auto cmd = parse_sql("INSERT INTO users (name, email) VALUE (\"Alice\", \"alice@mail.com\");");
-    ASSERT_NE(cmd, nullptr);
-    auto* insert_cmd = dynamic_cast<InsertIntoCommand*>(cmd.get());
-    ASSERT_NE(insert_cmd, nullptr);
-
-    auto json = insert_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "users");
-    EXPECT_EQ(parsed["columns"].size(), 2);
-    EXPECT_EQ(parsed["values"].size(), 2);
+    auto actual = parse_to_json("INSERT INTO users (name, email) VALUE (\"Alice\", \"alice@mail.com\");");
+    auto expected = json{
+        {"table_name", "users"},
+        {"columns", json::array({"name", "email"})},
+        {"values", json::array({
+            json{{"type", "string"}, {"value", "Alice"}},
+            json{{"type", "string"}, {"value", "alice@mail.com"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, InsertIntoNumbers) {
-    auto cmd = parse_sql("INSERT INTO products (id, price) VALUE (1, 999);");
-    ASSERT_NE(cmd, nullptr);
-    auto* insert_cmd = dynamic_cast<InsertIntoCommand*>(cmd.get());
-    ASSERT_NE(insert_cmd, nullptr);
-
-    auto json = insert_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "products");
-    EXPECT_EQ(parsed["values"].size(), 2);
+    auto actual = parse_to_json("INSERT INTO products (id, price) VALUE (1, 999);");
+    auto expected = json{
+        {"table_name", "products"},
+        {"columns", json::array({"id", "price"})},
+        {"values", json::array({
+            json{{"type", "int"}, {"value", 1}},
+            json{{"type", "int"}, {"value", 999}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, InsertIntoNull) {
-    auto cmd = parse_sql("INSERT INTO users (name, phone) VALUE (\"Bob\", NULL);");
-    ASSERT_NE(cmd, nullptr);
-    auto* insert_cmd = dynamic_cast<InsertIntoCommand*>(cmd.get());
-    ASSERT_NE(insert_cmd, nullptr);
-}
-
-TEST(ParserTest, InsertIntoWithToken) {
-    auto cmd = parse_sql("INSERT INTO t (a) VALUE (1) \"insert_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* insert_cmd = dynamic_cast<InsertIntoCommand*>(cmd.get());
-    ASSERT_NE(insert_cmd, nullptr);
-
-    EXPECT_EQ(insert_cmd->get_token(), "insert_token");
+    auto actual = parse_to_json("INSERT INTO users (name, phone) VALUE (\"Bob\", NULL);");
+    auto expected = json{
+        {"table_name", "users"},
+        {"columns", json::array({"name", "phone"})},
+        {"values", json::array({
+            json{{"type", "string"}, {"value", "Bob"}},
+            json{{"type", "null"}, {"value", nullptr}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 // ==================== UPDATE ====================
 
 TEST(ParserTest, UpdateSimple) {
-    auto cmd = parse_sql("UPDATE users SET name = \"Charlie\" WHERE id == 1;");
-    ASSERT_NE(cmd, nullptr);
-    auto* update_cmd = dynamic_cast<UpdateCommand*>(cmd.get());
-    ASSERT_NE(update_cmd, nullptr);
-
-    auto json = update_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "users");
-    EXPECT_TRUE(parsed.contains("condition"));
+    auto actual = parse_to_json("UPDATE users SET name = \"Charlie\" WHERE id == 1;");
+    EXPECT_EQ(actual["table_name"], "users");
+    EXPECT_EQ(actual["columns"], json::array({"name"}));
+    EXPECT_EQ(actual["values"], json::array({R"({"type":"string","value":"Charlie"})"_json}));
+    EXPECT_EQ(actual["condition"]["type"], "comparison");
+    EXPECT_EQ(actual["condition"]["column_name"], "id");
+    EXPECT_EQ(actual["condition"]["comparison_type"], 0);
+    EXPECT_EQ(actual["condition"]["value"], R"({"type":"int","value":1})"_json);
 }
 
 TEST(ParserTest, UpdateMultipleSets) {
-    auto cmd = parse_sql("UPDATE products SET price = 100, name = \"NewName\" WHERE id == 5;");
-    ASSERT_NE(cmd, nullptr);
-    auto* update_cmd = dynamic_cast<UpdateCommand*>(cmd.get());
-    ASSERT_NE(update_cmd, nullptr);
-
-    EXPECT_TRUE(update_cmd->get_token().empty());
-}
-
-TEST(ParserTest, UpdateWithToken) {
-    auto cmd = parse_sql("UPDATE users SET name = \"Bob\" WHERE id == 1 \"update_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* update_cmd = dynamic_cast<UpdateCommand*>(cmd.get());
-    ASSERT_NE(update_cmd, nullptr);
-
-    EXPECT_EQ(update_cmd->get_token(), "update_token");
+    auto actual = parse_to_json("UPDATE products SET price = 100, name = \"NewName\" WHERE id == 5;");
+    EXPECT_EQ(actual["table_name"], "products");
+    EXPECT_EQ(actual["columns"], json::array({"price", "name"}));
+    EXPECT_EQ(actual["values"], json::array({
+        json{{"type", "int"}, {"value", 100}},
+        json{{"type", "string"}, {"value", "NewName"}}
+    }));
 }
 
 // ==================== DELETE FROM ====================
 
 TEST(ParserTest, DeleteSimple) {
-    auto cmd = parse_sql("DELETE FROM users WHERE id == 10;");
-    ASSERT_NE(cmd, nullptr);
-    auto* delete_cmd = dynamic_cast<DeleteFromCommand*>(cmd.get());
-    ASSERT_NE(delete_cmd, nullptr);
-
-    auto json = delete_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "users");
-    EXPECT_TRUE(parsed.contains("condition"));
-}
-
-TEST(ParserTest, DeleteWithToken) {
-    auto cmd = parse_sql("DELETE FROM users WHERE id == 1 \"delete_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* delete_cmd = dynamic_cast<DeleteFromCommand*>(cmd.get());
-    ASSERT_NE(delete_cmd, nullptr);
-
-    EXPECT_EQ(delete_cmd->get_token(), "delete_token");
+    auto actual = parse_to_json("DELETE FROM users WHERE id == 10;");
+    EXPECT_EQ(actual["table_name"], "users");
+    EXPECT_EQ(actual["condition"]["type"], "comparison");
+    EXPECT_EQ(actual["condition"]["column_name"], "id");
+    EXPECT_EQ(actual["condition"]["comparison_type"], 0);
+    EXPECT_EQ(actual["condition"]["value"], R"({"type":"int","value":10})"_json);
 }
 
 // ==================== SELECT ====================
 
 TEST(ParserTest, SelectStar) {
-    auto cmd = parse_sql("SELECT * FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_EQ(parsed["table_name"], "users");
+    auto actual = parse_to_json("SELECT * FROM users;");
+    auto expected = json{{"table_name", "users"}, {"select_targets", json::array()}};
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, SelectColumns) {
-    auto cmd = parse_sql("SELECT name, email FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed.contains("select_targets"));
-    EXPECT_EQ(parsed["select_targets"].size(), 2);
-    EXPECT_EQ(parsed["select_targets"][0]["type"], "column");
-    EXPECT_EQ(parsed["select_targets"][0]["column_name"], "name");
-    EXPECT_EQ(parsed["select_targets"][1]["type"], "column");
-    EXPECT_EQ(parsed["select_targets"][1]["column_name"], "email");
-}
-
-TEST(ParserTest, SelectWithCondition) {
-    auto cmd = parse_sql("SELECT * FROM users WHERE age >= 18;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-
-    auto json = select_cmd->serialize_command();
-    auto parsed = nlohmann::json::parse(json);
-    EXPECT_TRUE(parsed.contains("condition"));
+    auto actual = parse_to_json("SELECT name, email FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "column"}, {"column_name", "name"}},
+            json{{"type", "column"}, {"column_name", "email"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, SelectWithAlias) {
-    auto cmd = parse_sql("SELECT name AS n FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
+    auto actual = parse_to_json("SELECT name AS n FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "column"}, {"column_name", "name"}, {"alias", "n"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
-TEST(ParserTest, SelectWithToken) {
-    auto cmd = parse_sql("SELECT * FROM t \"select_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-
-    EXPECT_EQ(select_cmd->get_token(), "select_token");
-}
-
-TEST(ParserTest, SelectWithWhereAndToken) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id > 5 \"select_where_token\";");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-
-    EXPECT_EQ(select_cmd->get_token(), "select_where_token");
+TEST(ParserTest, SelectWithCondition) {
+    auto actual = parse_to_json("SELECT * FROM users WHERE age >= 18;");
+    EXPECT_EQ(actual["table_name"], "users");
+    EXPECT_EQ(actual["select_targets"], json::array());
+    EXPECT_EQ(actual["condition"]["type"], "comparison");
+    EXPECT_EQ(actual["condition"]["column_name"], "age");
+    EXPECT_EQ(actual["condition"]["comparison_type"], 3);  // GreaterEqual
+    EXPECT_EQ(actual["condition"]["value"], R"({"type":"int","value":18})"_json);
 }
 
 // ==================== Conditions (comparison operators) ====================
 
 TEST(ParserTest, ConditionEqual) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id == 1;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id == 1;");
+    EXPECT_EQ(c["type"], "comparison");
+    EXPECT_EQ(c["column_name"], "id");
+    EXPECT_EQ(c["comparison_type"], 0);  // Equal
+    EXPECT_EQ(c["value"], R"({"type":"int","value":1})"_json);
 }
 
 TEST(ParserTest, ConditionNotEqual) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id != 1;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id != 1;");
+    EXPECT_EQ(c["type"], "comparison");
+    EXPECT_EQ(c["column_name"], "id");
+    EXPECT_EQ(c["comparison_type"], 1);  // NotEqual
+    EXPECT_EQ(c["value"], R"({"type":"int","value":1})"_json);
 }
 
 TEST(ParserTest, ConditionLess) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id < 10;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id < 10;");
+    EXPECT_EQ(c["comparison_type"], 4);  // Less
 }
 
 TEST(ParserTest, ConditionGreater) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id > 5;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id > 5;");
+    EXPECT_EQ(c["comparison_type"], 2);  // Greater
 }
 
 TEST(ParserTest, ConditionLessEqual) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id <= 100;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id <= 100;");
+    EXPECT_EQ(c["comparison_type"], 5);  // LessEqual
 }
 
 TEST(ParserTest, ConditionGreaterEqual) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE id >= 18;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE id >= 18;");
+    EXPECT_EQ(c["comparison_type"], 3);  // GreaterEqual
 }
 
 TEST(ParserTest, ConditionStringValue) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE name == \"admin\";");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE name == \"admin\";");
+    EXPECT_EQ(c["type"], "comparison");
+    EXPECT_EQ(c["column_name"], "name");
+    EXPECT_EQ(c["comparison_type"], 0);
+    EXPECT_EQ(c["value"], R"({"type":"string","value":"admin"})"_json);
 }
 
-// ==================== Error cases ====================
-
-TEST(ParserTest, ErrorEmptyInput) {
-    EXPECT_THROW(parse_sql(""), ParserException);
-}
-
-TEST(ParserTest, ErrorUnknownCommand) {
-    EXPECT_THROW(parse_sql("FOOBAR my_table;"), ParserException);
-}
-
-TEST(ParserTest, ErrorCreateTableMissingParentheses) {
-    EXPECT_THROW(parse_sql("CREATE TABLE users id int;"), ParserException);
-}
+// ==================== Between / Like ====================
 
 TEST(ParserTest, BetweenCondition) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE price BETWEEN 100 AND 500;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE price BETWEEN 100 AND 500;");
+    EXPECT_EQ(c["type"], "between");
+    EXPECT_EQ(c["column_name"], "price");
+    EXPECT_EQ(c["start"], R"({"type":"int","value":100})"_json);
+    EXPECT_EQ(c["end"], R"({"type":"int","value":500})"_json);
 }
 
 TEST(ParserTest, LikeCondition) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE name LIKE \"A%\";");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE name LIKE \"A%\";");
+    EXPECT_EQ(c["type"], "regex");
+    EXPECT_EQ(c["column_name"], "name");
+    EXPECT_EQ(c["regex"], "A.*");
 }
 
 // ==================== Logical AND/OR/NOT with parentheses ====================
 
 TEST(ParserTest, AndCondition) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE age > 18 AND name == \"Alice\";");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE age > 18 AND name == \"Alice\";");
+    EXPECT_EQ(c["type"], "and");
+    EXPECT_EQ(c["left"]["column_name"], "age");
+    EXPECT_EQ(c["right"]["column_name"], "name");
 }
 
 TEST(ParserTest, OrCondition) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE age < 10 OR age > 60;");
-    ASSERT_NE(cmd, nullptr);
-}
-
-TEST(ParserTest, NotCondition) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE NOT admin;");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE age < 10 OR age > 60;");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["column_name"], "age");
+    EXPECT_EQ(c["left"]["comparison_type"], 4);
+    EXPECT_EQ(c["right"]["column_name"], "age");
+    EXPECT_EQ(c["right"]["comparison_type"], 2);
 }
 
 TEST(ParserTest, ParenthesesSimple) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE (age > 18);");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE (age > 18);");
+    // скобки не создают отдельного узла
+    EXPECT_EQ(c["type"], "comparison");
+    EXPECT_EQ(c["column_name"], "age");
+    EXPECT_EQ(c["comparison_type"], 2);
 }
 
 TEST(ParserTest, ParenthesesNested) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE (age > 18 AND (name == \"A\" OR name == \"B\"));");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE (age > 18 AND (name == \"A\" OR name == \"B\"));");
+    EXPECT_EQ(c["type"], "and");
+    EXPECT_EQ(c["left"]["column_name"], "age");
+    EXPECT_EQ(c["right"]["type"], "or");
+    EXPECT_EQ(c["right"]["left"]["column_name"], "name");
+    EXPECT_EQ(c["right"]["right"]["column_name"], "name");
 }
 
 TEST(ParserTest, ParenthesesPrecedence) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE age > 18 OR (admin == 1 AND name == \"root\");");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE age > 18 OR (admin == 1 AND name == \"root\");");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "comparison");
+    EXPECT_EQ(c["right"]["type"], "and");
+}
+
+TEST(ParserTest, NotCondition) {
+    auto c = cond("SELECT * FROM t WHERE NOT admin;");
+    EXPECT_EQ(c["type"], "not");
+    EXPECT_EQ(c["operand"]["type"], "comparison");
+    EXPECT_EQ(c["operand"]["column_name"], "admin");
+    EXPECT_EQ(c["operand"]["comparison_type"], 1);  // NotEqual(admin, 0)
 }
 
 TEST(ParserTest, ParenthesesDeepNested) {
-    auto cmd = parse_sql("SELECT * FROM t WHERE ((age >= 18 AND name == \"foo\") OR (NOT banned));");
-    ASSERT_NE(cmd, nullptr);
+    auto c = cond("SELECT * FROM t WHERE ((age >= 18 AND name == \"foo\") OR (NOT banned));");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "and");
+    EXPECT_EQ(c["left"]["left"]["column_name"], "age");
+    EXPECT_EQ(c["left"]["right"]["column_name"], "name");
+    EXPECT_EQ(c["right"]["type"], "not");
+    EXPECT_EQ(c["right"]["operand"]["column_name"], "banned");
 }
 
 // ==================== Aggregate functions ====================
 
 TEST(ParserTest, SelectSum) {
-    auto cmd = parse_sql("SELECT SUM(age) FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-    auto targets = select_cmd->get_select_targets();
-    ASSERT_EQ(targets.size(), 1);
-    EXPECT_EQ(targets[0].column_name, "age");
-    ASSERT_TRUE(targets[0].agg_func.has_value());
-    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Sum);
+    auto actual = parse_to_json("SELECT SUM(age) FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "aggregate"}, {"func", "sum"}, {"column_name", "age"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, SelectCount) {
-    auto cmd = parse_sql("SELECT COUNT(*) FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-    auto targets = select_cmd->get_select_targets();
-    ASSERT_EQ(targets.size(), 1);
-    EXPECT_TRUE(targets[0].column_name.empty());
-    ASSERT_TRUE(targets[0].agg_func.has_value());
-    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Count);
+    auto actual = parse_to_json("SELECT COUNT(*) FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "aggregate"}, {"func", "count"}, {"column_name", ""}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, SelectAvg) {
-    auto cmd = parse_sql("SELECT AVG(salary) FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-    auto targets = select_cmd->get_select_targets();
-    ASSERT_EQ(targets.size(), 1);
-    EXPECT_EQ(targets[0].column_name, "salary");
-    ASSERT_TRUE(targets[0].agg_func.has_value());
-    EXPECT_EQ(targets[0].agg_func.value(), AggregateFunction::Avg);
+    auto actual = parse_to_json("SELECT AVG(salary) FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "aggregate"}, {"func", "avg"}, {"column_name", "salary"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(ParserTest, SelectMixedAggregatesAndColumns) {
-    auto cmd = parse_sql("SELECT name, SUM(age), COUNT(*), AVG(salary) FROM users;");
-    ASSERT_NE(cmd, nullptr);
-    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
-    ASSERT_NE(select_cmd, nullptr);
-    auto targets = select_cmd->get_select_targets();
-    ASSERT_EQ(targets.size(), 4);
-    /* name */
-    EXPECT_EQ(targets[0].column_name, "name");
-    EXPECT_FALSE(targets[0].agg_func.has_value());
-    /* SUM(age) */
-    EXPECT_EQ(targets[1].column_name, "age");
-    ASSERT_TRUE(targets[1].agg_func.has_value());
-    EXPECT_EQ(targets[1].agg_func.value(), AggregateFunction::Sum);
-    /* COUNT(*) */
-    EXPECT_TRUE(targets[2].column_name.empty());
-    ASSERT_TRUE(targets[2].agg_func.has_value());
-    EXPECT_EQ(targets[2].agg_func.value(), AggregateFunction::Count);
-    /* AVG(salary) */
-    EXPECT_EQ(targets[3].column_name, "salary");
-    ASSERT_TRUE(targets[3].agg_func.has_value());
-    EXPECT_EQ(targets[3].agg_func.value(), AggregateFunction::Avg);
+    auto actual = parse_to_json("SELECT name, SUM(age), COUNT(*), AVG(salary) FROM users;");
+    auto expected = json{
+        {"table_name", "users"},
+        {"select_targets", json::array({
+            json{{"type", "column"}, {"column_name", "name"}},
+            json{{"type", "aggregate"}, {"func", "sum"}, {"column_name", "age"}},
+            json{{"type", "aggregate"}, {"func", "count"}, {"column_name", ""}},
+            json{{"type", "aggregate"}, {"func", "avg"}, {"column_name", "salary"}}
+        })}
+    };
+    EXPECT_EQ(actual, expected);
+}
+
+// ==================== Order of operations (AND/OR precedence) ====================
+
+TEST(ParserTest, PrecedenceAndBindsTighterThanOr) {
+    auto c = cond("SELECT * FROM t WHERE age > 10 AND name == \"Alice\" OR id == 1;");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "and");
+    EXPECT_EQ(c["right"]["column_name"], "id");
+}
+
+TEST(ParserTest, PrecedenceOrWithAndOnRight) {
+    auto c = cond("SELECT * FROM t WHERE age > 10 OR name == \"Alice\" AND id == 1;");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "comparison");
+    EXPECT_EQ(c["left"]["column_name"], "age");
+    EXPECT_EQ(c["right"]["type"], "and");
+}
+
+TEST(ParserTest, PrecedenceParensOverride) {
+    auto c = cond("SELECT * FROM t WHERE (age > 10 OR name == \"Alice\") AND id == 1;");
+    EXPECT_EQ(c["type"], "and");
+    EXPECT_EQ(c["left"]["type"], "or");
+    EXPECT_EQ(c["right"]["column_name"], "id");
+}
+
+TEST(ParserTest, PrecedenceParensBeforeAnd) {
+    auto c = cond("SELECT * FROM t WHERE age > 10 AND (name == \"Alice\" OR id == 1);");
+    EXPECT_EQ(c["type"], "and");
+    EXPECT_EQ(c["left"]["type"], "comparison");
+    EXPECT_EQ(c["left"]["column_name"], "age");
+    EXPECT_EQ(c["right"]["type"], "or");
+}
+
+TEST(ParserTest, PrecedenceVovaExample) {
+    auto c = cond("SELECT * FROM t WHERE (id == 1 AND name == \"vova\") OR id == 3;");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "and");
+    EXPECT_EQ(c["left"]["left"]["column_name"], "id");
+    EXPECT_EQ(c["left"]["left"]["comparison_type"], 0);
+    EXPECT_EQ(c["left"]["right"]["column_name"], "name");
+    EXPECT_EQ(c["right"]["type"], "comparison");
+    EXPECT_EQ(c["right"]["column_name"], "id");
+    EXPECT_EQ(c["right"]["comparison_type"], 0);
+}
+
+TEST(ParserTest, PrecedenceNestedParens) {
+    auto c = cond("SELECT * FROM t WHERE (age > 10 AND (name == \"Alice\" OR id == 1)) OR admin == 1;");
+    EXPECT_EQ(c["type"], "or");
+    EXPECT_EQ(c["left"]["type"], "and");
+    EXPECT_EQ(c["left"]["right"]["type"], "or");
+    EXPECT_EQ(c["right"]["type"], "comparison");
+    EXPECT_EQ(c["right"]["column_name"], "admin");
 }
 
 // ==================== Error cases ====================
 
+TEST(ParserTest, ErrorEmptyInput) {
+    EXPECT_THROW(parse_to_json(""), ParserException);
+}
+
+TEST(ParserTest, ErrorUnknownCommand) {
+    EXPECT_THROW(parse_to_json("FOOBAR my_table;"), ParserException);
+}
+
+TEST(ParserTest, ErrorCreateTableMissingParentheses) {
+    EXPECT_THROW(parse_to_json("CREATE TABLE users id int;"), ParserException);
+}
+
 TEST(ParserTest, ErrorMissingSemicolon) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t"), ParserException);
+    EXPECT_THROW(parse_to_json("SELECT * FROM t"), ParserException);
 }
 
 TEST(ParserTest, ErrorNoDatabaseName) {
-    EXPECT_THROW(parse_sql("CREATE DATABASE;"), ParserException);
+    EXPECT_THROW(parse_to_json("CREATE DATABASE;"), ParserException);
 }
 
 TEST(ParserTest, ErrorUnmatchedOpenParen) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18;"), ParserException);
+    EXPECT_THROW(parse_to_json("SELECT * FROM t WHERE (age > 18;"), ParserException);
 }
 
 TEST(ParserTest, ErrorUnmatchedCloseParen) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE age > 18);"), ParserException);
+    EXPECT_THROW(parse_to_json("SELECT * FROM t WHERE age > 18);"), ParserException);
 }
 
 TEST(ParserTest, ErrorEmptyParens) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE ();"), ParserException);
+    EXPECT_THROW(parse_to_json("SELECT * FROM t WHERE ();"), ParserException);
 }
 
 TEST(ParserTest, ErrorUnmatchedNestedParen) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18 AND (name == \"A\");"), ParserException);
+    EXPECT_THROW(parse_to_json("SELECT * FROM t WHERE (age > 18 AND (name == \"A\");"), ParserException);
 }
 
 // ==================== JWT Token edge cases ====================
 
 TEST(ParserTest, TokenEmptyWhenNoToken) {
-    auto cmd = parse_sql("CREATE DATABASE mydb;");
-    ASSERT_NE(cmd, nullptr);
+    Lexer lexer;
+    auto tokens = lexer.tokenize("CREATE DATABASE mydb;");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
     EXPECT_TRUE(cmd->get_token().empty());
 }
 
 TEST(ParserTest, TokenNotEmptyWhenTokenPresent) {
-    auto cmd = parse_sql("DROP DATABASE mydb \"mytoken\";");
-    ASSERT_NE(cmd, nullptr);
+    Lexer lexer;
+    auto tokens = lexer.tokenize("DROP DATABASE mydb \"mytoken\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
     EXPECT_FALSE(cmd->get_token().empty());
+}
+
+// ==================== Token serialization tests ====================
+
+TEST(ParserTest, CreateDatabaseWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("CREATE DATABASE securedb \"eyJhbGciOiJIUzI1NiJ9.abc.xyz\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* create_cmd = dynamic_cast<CreateDatabaseCommand*>(cmd.get());
+    ASSERT_NE(create_cmd, nullptr);
+    EXPECT_EQ(create_cmd->get_token(), "eyJhbGciOiJIUzI1NiJ9.abc.xyz");
+    EXPECT_FALSE(create_cmd->get_token().empty());
+
+    auto actual = json::parse(cmd->serialize_command());
+    auto expected = R"({"database_name":"securedb"})"_json;
+    EXPECT_EQ(actual, expected);
+}
+
+TEST(ParserTest, DropDatabaseWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("DROP DATABASE old_db \"token123\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* drop_cmd = dynamic_cast<DropDatabaseCommand*>(cmd.get());
+    ASSERT_NE(drop_cmd, nullptr);
+    EXPECT_EQ(drop_cmd->get_token(), "token123");
+}
+
+TEST(ParserTest, UseDatabaseWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("USE active_db \"jwt_use\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* use_cmd = dynamic_cast<UseDatabaseCommand*>(cmd.get());
+    ASSERT_NE(use_cmd, nullptr);
+    EXPECT_EQ(use_cmd->get_token(), "jwt_use");
+}
+
+TEST(ParserTest, CreateTableWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("CREATE TABLE t (x int) \"table_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* create_cmd = dynamic_cast<CreateTableCommand*>(cmd.get());
+    ASSERT_NE(create_cmd, nullptr);
+    EXPECT_EQ(create_cmd->get_token(), "table_token");
+
+    auto actual = json::parse(cmd->serialize_command());
+    EXPECT_EQ(actual["table_name"], "t");
+}
+
+TEST(ParserTest, DropTableWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("DROP TABLE t \"drop_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* drop_cmd = dynamic_cast<DropTableCommand*>(cmd.get());
+    ASSERT_NE(drop_cmd, nullptr);
+    EXPECT_EQ(drop_cmd->get_token(), "drop_token");
+}
+
+TEST(ParserTest, InsertIntoWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("INSERT INTO t (a) VALUE (1) \"insert_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* insert_cmd = dynamic_cast<InsertIntoCommand*>(cmd.get());
+    ASSERT_NE(insert_cmd, nullptr);
+    EXPECT_EQ(insert_cmd->get_token(), "insert_token");
+}
+
+TEST(ParserTest, UpdateWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("UPDATE users SET name = \"Bob\" WHERE id == 1 \"update_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* update_cmd = dynamic_cast<UpdateCommand*>(cmd.get());
+    ASSERT_NE(update_cmd, nullptr);
+    EXPECT_EQ(update_cmd->get_token(), "update_token");
+}
+
+TEST(ParserTest, DeleteWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("DELETE FROM users WHERE id == 1 \"delete_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* delete_cmd = dynamic_cast<DeleteFromCommand*>(cmd.get());
+    ASSERT_NE(delete_cmd, nullptr);
+    EXPECT_EQ(delete_cmd->get_token(), "delete_token");
+}
+
+TEST(ParserTest, SelectWithToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("SELECT * FROM t \"select_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    EXPECT_EQ(select_cmd->get_token(), "select_token");
+}
+
+TEST(ParserTest, SelectWithWhereAndToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("SELECT * FROM t WHERE id > 5 \"select_where_token\";");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    EXPECT_EQ(select_cmd->get_token(), "select_where_token");
+}
+
+TEST(ParserTest, UpdateMultipleSetsNoToken) {
+    Lexer lexer;
+    auto tokens = lexer.tokenize("UPDATE products SET price = 100, name = \"NewName\" WHERE id == 5;");
+    Parser parser;
+    auto cmd = parser.parse(tokens);
+    EXPECT_TRUE(cmd->get_token().empty());
 }
 
 int main(int argc, char** argv) {

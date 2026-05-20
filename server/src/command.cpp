@@ -574,32 +574,17 @@ bool SelectCommand::set_database_name(const std::string &db_name) {
 
 nlohmann::json SelectCommand::process_command() {
     try {
-        /* собираем map колонок для storage engine (только обычные колонки) */
+        /* собираем map колонок для storage engine (только обычные колонки, без агрегатов) */
         std::optional<std::unordered_map<std::string, Alias>> columns_map = std::nullopt;
         for (const auto &t : _select_targets) {
-            if (!t.agg_func.has_value() && !columns_map.has_value()) {
-                columns_map = std::unordered_map<std::string, Alias>();
-            }
             if (!t.agg_func.has_value()) {
+                if (!columns_map.has_value()) columns_map = std::unordered_map<std::string, Alias>();
                 (*columns_map)[t.column_name] = t.alias;
             }
         }
 
-        auto raw = StorageEngine::select_elements(_database_name, _table_name, columns_map,
-                                                  std::move(_condition));
-
-        /* переставляем ключи в порядке _select_targets */
-        nlohmann::json ordered;
-        if (_select_targets.empty()) {
-            /* SELECT * — берём как есть */
-            ordered = std::move(raw);
-        } else {
-            for (const auto &t : _select_targets) {
-                std::string key = t.alias.has_value() ? t.alias.value() : t.column_name;
-                ordered[key] = raw.value(key, nlohmann::json::array());
-            }
-        }
-        return ordered;
+        return StorageEngine::select_elements(_database_name, _table_name, columns_map,
+                                              std::move(_condition));
     } catch (const std::exception &e) {
         nlohmann::json response;
         response["Message"] = e.what();
