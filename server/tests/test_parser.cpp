@@ -461,6 +461,22 @@ TEST(ParserTest, ErrorUnmatchedNestedParen) {
     EXPECT_THROW(parse_to_json("SELECT * FROM t WHERE (age > 18 AND (name == \"A\");"), ParserException);
 }
 
+TEST(ParserTest, ErrorUnmatchedOpenParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18;"), ParserException);
+}
+
+TEST(ParserTest, ErrorUnmatchedCloseParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE age > 18);"), ParserException);
+}
+
+TEST(ParserTest, ErrorEmptyParens) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE ();"), ParserException);
+}
+
+TEST(ParserTest, ErrorUnmatchedNestedParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18 AND (name == \"A\");"), ParserException);
+}
+
 // ==================== JWT Token edge cases ====================
 
 TEST(ParserTest, TokenEmptyWhenNoToken) {
