@@ -43,11 +43,15 @@ private:
     std::unique_ptr<Command> parse_select();
 
     std::unique_ptr<Condition> parse_condition();
-    std::unique_ptr<Condition> parse_simple_condition();
+    std::unique_ptr<Condition> parse_or_expression();
+    std::unique_ptr<Condition> parse_and_expression();
+    std::unique_ptr<Condition> parse_unary_expression();
+    std::unique_ptr<Condition> parse_primary_condition();
     Column parse_column_definition();
     Value parse_value();
     std::vector<std::string> parse_identifier_list();
     std::vector<Value> parse_value_list();
+    std::string parse_aggregate_or_column();
 };
 
 #endif //MINIDB_PARSER_H

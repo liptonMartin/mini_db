@@ -356,13 +356,100 @@ TEST(ParserTest, ErrorCreateTableMissingParentheses) {
     EXPECT_THROW(parse_sql("CREATE TABLE users id int;"), ParserException);
 }
 
-TEST(ParserTest, ErrorBetweenNotSupported) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE price BETWEEN 100 AND 500;"), ParserException);
+TEST(ParserTest, BetweenCondition) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE price BETWEEN 100 AND 500;");
+    ASSERT_NE(cmd, nullptr);
 }
 
-TEST(ParserTest, ErrorLikeNotSupported) {
-    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE name LIKE \"A%\";"), ParserException);
+TEST(ParserTest, LikeCondition) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE name LIKE \"A%\";");
+    ASSERT_NE(cmd, nullptr);
 }
+
+// ==================== Logical AND/OR/NOT with parentheses ====================
+
+TEST(ParserTest, AndCondition) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE age > 18 AND name == \"Alice\";");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, OrCondition) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE age < 10 OR age > 60;");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, NotCondition) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE NOT admin;");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, ParenthesesSimple) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE (age > 18);");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, ParenthesesNested) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE (age > 18 AND (name == \"A\" OR name == \"B\"));");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, ParenthesesPrecedence) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE age > 18 OR (admin == 1 AND name == \"root\");");
+    ASSERT_NE(cmd, nullptr);
+}
+
+TEST(ParserTest, ParenthesesDeepNested) {
+    auto cmd = parse_sql("SELECT * FROM t WHERE ((age >= 18 AND name == \"foo\") OR (NOT banned));");
+    ASSERT_NE(cmd, nullptr);
+}
+
+// ==================== Aggregate functions ====================
+
+TEST(ParserTest, SelectSum) {
+    auto cmd = parse_sql("SELECT SUM(age) FROM users;");
+    ASSERT_NE(cmd, nullptr);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    auto json = select_cmd->serialize_command();
+    auto parsed = nlohmann::json::parse(json);
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("SUM(age)"));
+}
+
+TEST(ParserTest, SelectCount) {
+    auto cmd = parse_sql("SELECT COUNT(*) FROM users;");
+    ASSERT_NE(cmd, nullptr);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    auto json = select_cmd->serialize_command();
+    auto parsed = nlohmann::json::parse(json);
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("COUNT(*)"));
+}
+
+TEST(ParserTest, SelectAvg) {
+    auto cmd = parse_sql("SELECT AVG(salary) FROM users;");
+    ASSERT_NE(cmd, nullptr);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    auto json = select_cmd->serialize_command();
+    auto parsed = nlohmann::json::parse(json);
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("AVG(salary)"));
+}
+
+TEST(ParserTest, SelectMixedAggregatesAndColumns) {
+    auto cmd = parse_sql("SELECT name, SUM(age), COUNT(*), AVG(salary) FROM users;");
+    ASSERT_NE(cmd, nullptr);
+    auto* select_cmd = dynamic_cast<SelectCommand*>(cmd.get());
+    ASSERT_NE(select_cmd, nullptr);
+    auto json = select_cmd->serialize_command();
+    auto parsed = nlohmann::json::parse(json);
+    EXPECT_EQ(parsed["columns_with_aliases"].size(), 4);
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("name"));
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("SUM(age)"));
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("COUNT(*)"));
+    EXPECT_TRUE(parsed["columns_with_aliases"].contains("AVG(salary)"));
+}
+
+// ==================== Error cases ====================
 
 TEST(ParserTest, ErrorMissingSemicolon) {
     EXPECT_THROW(parse_sql("SELECT * FROM t"), ParserException);
@@ -370,6 +457,22 @@ TEST(ParserTest, ErrorMissingSemicolon) {
 
 TEST(ParserTest, ErrorNoDatabaseName) {
     EXPECT_THROW(parse_sql("CREATE DATABASE;"), ParserException);
+}
+
+TEST(ParserTest, ErrorUnmatchedOpenParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18;"), ParserException);
+}
+
+TEST(ParserTest, ErrorUnmatchedCloseParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE age > 18);"), ParserException);
+}
+
+TEST(ParserTest, ErrorEmptyParens) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE ();"), ParserException);
+}
+
+TEST(ParserTest, ErrorUnmatchedNestedParen) {
+    EXPECT_THROW(parse_sql("SELECT * FROM t WHERE (age > 18 AND (name == \"A\");"), ParserException);
 }
 
 // ==================== JWT Token edge cases ====================

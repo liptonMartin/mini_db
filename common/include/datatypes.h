@@ -298,6 +298,41 @@ public:
     nlohmann::json to_json() const override;
 };
 
+class NotCondition : public Condition {
+    std::unique_ptr<Condition> _operand;
+
+public:
+    explicit NotCondition(std::unique_ptr<Condition> operand);
+
+    bool evaluate(const Row &column_values) const override;
+
+    nlohmann::json to_json() const override;
+};
+
+class AndCondition : public Condition {
+    std::unique_ptr<Condition> _left;
+    std::unique_ptr<Condition> _right;
+
+public:
+    AndCondition(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right);
+
+    bool evaluate(const Row &column_values) const override;
+
+    nlohmann::json to_json() const override;
+};
+
+class OrCondition : public Condition {
+    std::unique_ptr<Condition> _left;
+    std::unique_ptr<Condition> _right;
+
+public:
+    OrCondition(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right);
+
+    bool evaluate(const Row &column_values) const override;
+
+    nlohmann::json to_json() const override;
+};
+
 /**
  * На первой страницы файла {name}.binary хранится :
  * ptrdiff_t size_name

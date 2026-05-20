@@ -8,6 +8,22 @@
 
 std::unique_ptr<Condition> Condition::from_json(const nlohmann::json &j) {
     const std::string type = j.at("type");
+
+    if (type == "not") {
+        auto operand = Condition::from_json(j.at("operand"));
+        return std::make_unique<NotCondition>(std::move(operand));
+    }
+    if (type == "and") {
+        auto left = Condition::from_json(j.at("left"));
+        auto right = Condition::from_json(j.at("right"));
+        return std::make_unique<AndCondition>(std::move(left), std::move(right));
+    }
+    if (type == "or") {
+        auto left = Condition::from_json(j.at("left"));
+        auto right = Condition::from_json(j.at("right"));
+        return std::make_unique<OrCondition>(std::move(left), std::move(right));
+    }
+
     const std::string column_name = j.at("column_name");
 
     if (type == "comparison") {
@@ -167,4 +183,51 @@ bool RegexCondition::evaluate(const Row &column_values) const {
     const auto str = std::get<std::string>(col_val);
     const std::regex regex(_regex);
     return std::regex_match(str, regex);
+}
+
+NotCondition::NotCondition(std::unique_ptr<Condition> operand)
+    : Condition(""), _operand(std::move(operand)) {
+}
+
+bool NotCondition::evaluate(const Row &column_values) const {
+    return !_operand->evaluate(column_values);
+}
+
+nlohmann::json NotCondition::to_json() const {
+    nlohmann::json j;
+    j["type"] = "not";
+    j["operand"] = _operand->to_json();
+    return j;
+}
+
+AndCondition::AndCondition(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right)
+    : Condition(""), _left(std::move(left)), _right(std::move(right)) {
+}
+
+bool AndCondition::evaluate(const Row &column_values) const {
+    return _left->evaluate(column_values) && _right->evaluate(column_values);
+}
+
+nlohmann::json AndCondition::to_json() const {
+    nlohmann::json j;
+    j["type"] = "and";
+    j["left"] = _left->to_json();
+    j["right"] = _right->to_json();
+    return j;
+}
+
+OrCondition::OrCondition(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right)
+    : Condition(""), _left(std::move(left)), _right(std::move(right)) {
+}
+
+bool OrCondition::evaluate(const Row &column_values) const {
+    return _left->evaluate(column_values) || _right->evaluate(column_values);
+}
+
+nlohmann::json OrCondition::to_json() const {
+    nlohmann::json j;
+    j["type"] = "or";
+    j["left"] = _left->to_json();
+    j["right"] = _right->to_json();
+    return j;
 }
